@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "490774413947",
+    "project_id": "fileocr-1580a",
+    "storage_bucket": "fileocr-1580a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:490774413947:android:532aa3b0649a9407f198de",
+        "android_client_info": {
+          "package_name": "com.manpreetgugga.boomlets"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "490774413947-usko3tu5l6eo0s1coi47df54bnd0p0kf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyConTufQkn6hWNYQXMVH1DFfqXPr2ademU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "490774413947-usko3tu5l6eo0s1coi47df54bnd0p0kf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

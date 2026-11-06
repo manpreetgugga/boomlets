@@ -10,6 +10,8 @@ var best_time: Dictionary = {}  # "1-3" -> seconds
 var music_on: bool = true
 var sound_on: bool = true
 var haptics_on: bool = true
+## The player's own switch for anonymous play stats (Privacy card).
+var stats_on: bool = true
 ## The world played last; the menu's Play button opens its map.
 var last_world: int = 1
 
@@ -69,7 +71,7 @@ func record(world: int, level: int, earned: int, seconds: float) -> bool:
 func write() -> void:
 	var data: Dictionary = {
 		"version": 1, "stars": stars, "best_time": best_time,
-		"music": music_on, "sound": sound_on, "haptics": haptics_on,
+		"music": music_on, "sound": sound_on, "haptics": haptics_on, "stats": stats_on,
 		"world": last_world,
 	}
 	var tmp: String = PATH + ".tmp"
@@ -93,6 +95,7 @@ func _load() -> void:
 	music_on = bool(d.get("music", true))
 	sound_on = bool(d.get("sound", true))
 	haptics_on = bool(d.get("haptics", true))
+	stats_on = bool(d.get("stats", true))
 	last_world = clampi(int(d.get("world", 1)), 1, Levels.WORLD_COUNT)
 
 

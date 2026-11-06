@@ -4,7 +4,7 @@ Pop pods. Blast crates. Outsmart the critters!
 
 Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floating worlds: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.
 
-**[Download the latest APK](https://github.com/manpreetgugga/boomlets/releases/latest)** (Android 7+, arm64)
+**[Download the latest APK](https://github.com/manpreetgugga/boomlets/releases/latest)** (Android 10+, arm64)
 
 <p>
   <img src="shots/menu.png" width="160" alt="Main menu">
@@ -55,6 +55,7 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floatin
 - Pods pop after 2.5 seconds and blast in a plus shape. Blasts set off other pods.
 - Pop every critter to open the exit pad, then walk onto it.
 - Finish quickly for 3 stars.
+- Out of lives? Watch a short ad for one more life (once per try).
 
 ### Power-ups (from broken crates)
 
@@ -105,20 +106,32 @@ Each world has its own look, music, twist, critter and boss, across six levels. 
 2. Press **Play** to run it on your computer. Arrow keys or WASD move, Space drops a pod and Esc pauses.
 3. To build an APK, install the Android export templates and set the Android SDK path in Godot's editor settings, then use **Project > Export > Android**.
 
-The signed release build uses `tools/build_release.ps1`. It asks for the keystore password and never stores it. The keystore itself is not in this repo.
+The signed release build uses `tools/build_release.ps1`. It asks for the keystore password once, never stores it, and builds both `export/Boomlets.apk` (GitHub Releases) and `export/Boomlets.aab` (Google Play). The keystore itself is not in this repo.
+
+Android exports use Godot's Gradle build, because of the ads and analytics plugins. `tools/prepare_android_build.ps1` (run by the release script) unpacks the build template into `android/build` and adds the google-services Gradle plugin.
+
+### Ads, analytics and privacy
+
+- **Ads:** [Poing Studios AdMob plugin](https://github.com/poingstudios/godot-admob-plugin) 5.1. A rewarded ad offers an extra life on "Out of lives!", and an interstitial plays now and then between levels (at most every 3 finished levels, 2.5 minutes apart, never in the first few levels). Debug builds always use Google's test ads.
+- **Analytics:** [Godotx Firebase](https://github.com/godot-x/firebase) 3.1 (Core and Analytics). Events: `level_start`, `level_end` and rewarded-ad events.
+- **Consent:** Google's consent form (UMP) runs at start-up where the law requires it. Firebase starts with collection off and every consent signal denied, and turns on only where no consent is needed or the player agreed. The menu's **Privacy** card has a "Play stats" switch, "Ad choices" (where it applies) and the privacy policy.
+- `core/Services.gd` holds all of this; on desktop it does nothing.
+- The privacy policy and `app-ads.txt` are in `docs/` (served by GitHub Pages).
 
 ### Project layout
 
 | Folder | Contents |
 |---|---|
 | `game/` | Arena rules: movement, pods, blasts, critters, boss |
-| `core/` | World registry, save file, sound |
+| `core/` | World registry, save file, sound, ads/analytics/consent (`Services.gd`) |
 | `worlds/` | One script per world: its levels, look, rules, critters and boss (`WorldKit.gd` lists the hooks) |
 | `render/` | Clay models built in code |
 | `ui/` | Menu, level map, HUD and buttons |
 | `shaders/` | Clay, glass, sky and shadow shaders |
 | `tools/` | Screenshot, music, icon and release build scripts |
+| `addons/`, `android/` | AdMob and Firebase plugins |
+| `docs/` | Website: privacy policy, `app-ads.txt` |
 
 ## Credits
 
-Made by Manpreet Gugga. Nunito font by Vernon Adams and others, under the SIL Open Font License (`fonts/OFL.txt`).
+Made by Manpreet Gugga. [Privacy policy](https://manpreetgugga.github.io/boomlets/privacy.html). Nunito font by Vernon Adams and others, under the SIL Open Font License (`fonts/OFL.txt`).

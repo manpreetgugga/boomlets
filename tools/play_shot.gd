@@ -102,6 +102,18 @@ func _act(what: String, arg: String) -> void:
 			var br: Vector2 = arena.camera.unproject_position(Vector3(arena.W - 0.5, 0, arena.H - 0.5))
 			var bl: Vector2 = arena.camera.unproject_position(Vector3(-0.5, 0, arena.H - 0.5))
 			print("maptest: %d tiles map wrong; arena top-left %s bottom-left %s bottom-right %s" % [bad, tl, bl, br])
+		"die":
+			# Loses every life at once: the "Out of lives!" card follows.
+			arena.lives = 1
+			arena.hero_invuln = 0.0
+			arena.shield = false
+			arena._hurt_hero()
+		"fakead":
+			root.get_node("Services").fake_rewarded = true
+		"extralife":
+			_main.hud._watch_for_life()
+		"privacy":
+			_main._show_privacy(_main._ui.get_child(0))
 		"bosshit":
 			if arena.boss != null:
 				arena.flames[arena.hero_cell()] = 0.0

@@ -14,3 +14,7 @@ export/
 
 # Local tools
 .gh/
+
+# Android Gradle build template (about 200 MB; tools/prepare_android_build.ps1 recreates it)
+android/build/
+android/.build_version

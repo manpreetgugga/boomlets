@@ -986,6 +986,14 @@ func _respawn() -> void:
 	Sfx.play(&"whoosh")
 
 
+## Brings Pip back with one life after "Out of lives!" (the rewarded ad).
+func revive() -> void:
+	if state != &"lost" or hero_alive:
+		return
+	lives = 1
+	_respawn()
+
+
 func _hurt_hero() -> void:
 	if state != &"play" or not hero_alive or hero_invuln > 0.0 or demo:
 		return

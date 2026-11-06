@@ -23,6 +23,8 @@ var _swipe_from: Vector2 = Vector2.INF
 ## Started by a dev argument (--world, --level, --screen): stay on that
 ## world and leave the saved one be.
 var _dev: bool = false
+## The Privacy card over the menu, while it is open.
+var _privacy: Control = null
 
 
 func _ready() -> void:
@@ -174,6 +176,66 @@ func _show_menu() -> void:
 		Sfx.music(Save.music_on)
 		Save.write())
 	root.add_child(music)
+
+	var privacy := Btn.make("Privacy", &"", Vector2(220, 64))
+	privacy.font_size = 28
+	privacy.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	privacy.position = Vector2(-110, -82)
+	privacy.pressed.connect(_show_privacy.bind(root))
+	root.add_child(privacy)
+
+
+## The Privacy card: what the game collects, the player's own switch for
+## play stats, Google's ad-consent choices (where they apply) and the policy.
+func _show_privacy(root: Control) -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(0.16, 0.12, 0.25, 0.35)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+	_privacy = dim
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.add_child(center)
+	var panel := Ui.card(Ui.CREAM, 44)
+	panel.custom_minimum_size = Vector2(560, 0)
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 16)
+	panel.add_child(box)
+	box.add_child(Ui.label("Privacy", 54, Ui.INK, 900))
+	var about := Ui.label("Boomlets has no accounts and never asks for your name. "
+		+ "It shows ads from Google AdMob, and sends anonymous play stats "
+		+ "(like which levels are tricky) to Google Firebase. "
+		+ "Your progress stays on this phone.", 26, Ui.INK_SOFT, 800)
+	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	about.custom_minimum_size = Vector2(480, 0)
+	box.add_child(about)
+	var buttons: Array[Btn] = []
+	var stats := Btn.make("", &"", Vector2(440, 88), Ui.MINT if Save.stats_on else Ui.CREAM.darkened(0.06))
+	stats.text = "Play stats: On" if Save.stats_on else "Play stats: Off"
+	stats.pressed.connect(func() -> void:
+		Services.set_stats_on(not Save.stats_on)
+		stats.text = "Play stats: On" if Save.stats_on else "Play stats: Off"
+		stats.color = Ui.MINT if Save.stats_on else Ui.CREAM.darkened(0.06)
+		stats.queue_redraw())
+	buttons.append(stats)
+	if Services.privacy_options_required():
+		var ads := Btn.make("Ad choices", &"", Vector2(440, 88))
+		ads.pressed.connect(Services.show_privacy_options)
+		buttons.append(ads)
+	var policy := Btn.make("Privacy policy", &"", Vector2(440, 88))
+	policy.pressed.connect(Services.open_privacy_policy)
+	buttons.append(policy)
+	var close := Btn.make("Close", &"", Vector2(440, 88), Ui.YELLOW)
+	close.pressed.connect(dim.queue_free)
+	buttons.append(close)
+	for b: Btn in buttons:
+		b.font_size = 34
+		var holder := CenterContainer.new()
+		holder.add_child(b)
+		box.add_child(holder)
 
 
 # --- Level map ---------------------------------------------------------------
@@ -395,12 +457,29 @@ func _start_level(n: int) -> void:
 	hud = Hud.new()
 	hud.arena = arena
 	hud.has_next = level < Levels.count(world) or world < Levels.WORLD_COUNT
-	hud.restart_requested.connect(func() -> void: _go(_start_level.bind(level)))
-	hud.next_requested.connect(func() -> void: _go(_next_level))
-	hud.map_requested.connect(func() -> void: _go(_show_map))
-	hud.home_requested.connect(func() -> void: _go(_show_menu))
+	hud.restart_requested.connect(func() -> void: _leave_level(_start_level.bind(level)))
+	hud.next_requested.connect(func() -> void: _leave_level(_next_level))
+	hud.map_requested.connect(func() -> void: _leave_level(_show_map))
+	hud.home_requested.connect(func() -> void: _leave_level(_show_menu))
+	var w: int = world
+	var l: int = level
+	var a: Arena = arena
+	Services.level_started(w, l)
+	arena.won.connect(func(stars: int, seconds: float) -> void: Services.level_won(w, l, stars, seconds, a.deaths))
+	arena.lost.connect(func(reason: String) -> void: Services.level_lost(w, l, reason, a.elapsed))
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui.add_child(hud)
+
+
+## Leaves the level for [param next]. After a finished level this is a
+## natural break, where an occasional interstitial ad may play first.
+func _leave_level(next: Callable) -> void:
+	if _busy:
+		return
+	if arena != null and (arena.state == &"won" or arena.state == &"lost"):
+		Services.level_break(func() -> void: _go(next))
+	else:
+		_go(next)
 
 
 ## The level after this one: the next on this world's trail, or after the
@@ -435,4 +514,7 @@ func _back() -> void:
 		&"map":
 			_go(_show_menu)
 		&"menu":
-			get_tree().quit()
+			if is_instance_valid(_privacy):
+				_privacy.queue_free()
+			else:
+				get_tree().quit()

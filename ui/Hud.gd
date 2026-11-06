@@ -38,6 +38,8 @@ var _star_ctrl: Control
 var _confetti: Control
 var _pause_btn: Btn
 var _clock: float = 0.0
+## The extra life from a rewarded ad is offered once per try.
+var _revived: bool = false
 
 
 func _ready() -> void:
@@ -392,7 +394,21 @@ func _add_confetti() -> void:
 
 func _on_lost(reason: String) -> void:
 	_pause_btn.visible = false
-	_open_card(reason, [
-		["Try again", &"restart", func() -> void: restart_requested.emit(), Ui.YELLOW],
-		["Levels", &"list", func() -> void: map_requested.emit()],
-	], -1, ["Critters left: %d" % arena.critters_left()])
+	var buttons: Array = []
+	var offer: bool = reason == "Out of lives!" and not _revived and Services.has_rewarded()
+	if offer:
+		buttons.append(["Extra life (ad)", &"heart", _watch_for_life, Ui.YELLOW])
+	buttons.append(["Try again", &"restart", func() -> void: restart_requested.emit(), Ui.CREAM.darkened(0.06) if offer else Ui.YELLOW])
+	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
+	_open_card(reason, buttons, -1, ["Critters left: %d" % arena.critters_left()])
+
+
+## Plays a rewarded ad and, if it was watched, carries on with one life.
+func _watch_for_life() -> void:
+	Services.show_rewarded("extra_life", func(earned: bool) -> void:
+		if not earned or arena == null:
+			return
+		_revived = true
+		_close_card()
+		_pause_btn.visible = true
+		arena.revive())
