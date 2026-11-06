@@ -1,0 +1,16 @@
+# Godot cache
+.godot/
+*.tmp
+
+# Builds (APKs go on GitHub Releases instead)
+export/
+*.apk
+*.aab
+*.idsig
+
+# Signing keys - never commit these
+*.keystore
+*.jks
+
+# Local tools
+.gh/

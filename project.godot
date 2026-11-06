@@ -1,0 +1,49 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="Boomlets"
+config/description="A cheerful 3D clay arena game: drop fizz pods, blast crates, outsmart critters."
+config/version="0.1.0"
+run/main_scene="res://ui/Main.tscn"
+config/quit_on_go_back=false
+config/features=PackedStringArray("4.7", "Mobile")
+boot_splash/bg_color=Color(0.988, 0.918, 0.835, 1)
+boot_splash/show_image=false
+
+[autoload]
+
+Save="*res://core/Save.gd"
+Sfx="*res://core/Sfx.gd"
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/size/window_width_override=405
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality.mobile=2
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/use_debanding=true
+environment/defaults/default_clear_color=Color(0.988, 0.918, 0.835, 1)
+
+[shader_globals]
+
+sky_tint={
+"type": "vec3",
+"value": Vector3(0.274, 0.479, 0.73)
+}
