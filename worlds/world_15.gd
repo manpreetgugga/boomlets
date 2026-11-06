@@ -1,5 +1,5 @@
 extends WorldKit
-## World 15, Origami Valley, the last world: a valley folded from crisp
+## World 15, Origami Valley: a valley folded from crisp
 ## paper. The twist is fold lines. Some patches of the board are paper
 ## panels (a cream sheet with crease lines, its border in the panel's
 ## colour); blasting one of the panel's fold markers (a paper pinwheel block

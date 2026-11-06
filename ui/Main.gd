@@ -305,21 +305,27 @@ func _build_world_nav(root: Control) -> void:
 
 	var pill := Ui.card(Color(Ui.CREAM, 0.94), 52)
 	pill.position = Vector2(-150, 0)
-	pill.custom_minimum_size = Vector2(300, 112)
-	pill.size = Vector2(300, 112)
+	var pill_h: float = 112.0 if Levels.WORLD_COUNT <= 15 else 132.0
+	pill.custom_minimum_size = Vector2(300, pill_h)
+	pill.size = Vector2(300, pill_h)
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override(&"separation", 0)
 	box.add_child(Ui.label("World %d / %d" % [world, Levels.WORLD_COUNT], 32, Ui.INK, 900))
+	# One dot per world, wrapped onto a second row when there are many.
+	var rows: int = 1 if Levels.WORLD_COUNT <= 15 else 2
+	var per_row: int = ceili(float(Levels.WORLD_COUNT) / rows)
 	var dots := Control.new()
-	dots.custom_minimum_size = Vector2(0, 24)
+	dots.custom_minimum_size = Vector2(0, 24 * rows)
 	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dots.draw.connect(func() -> void:
-		var gap: float = minf(34.0, 260.0 / maxf(Levels.WORLD_COUNT - 1, 1))
-		var r: float = minf(7.0, gap * 0.36)
-		var x0: float = dots.size.x * 0.5 - gap * (Levels.WORLD_COUNT - 1) * 0.5
+		var gap: float = minf(34.0, 260.0 / maxf(per_row - 1, 1))
+		var r: float = minf(7.0, gap * 0.32)
 		for k in Levels.WORLD_COUNT:
-			var c := Vector2(x0 + gap * k, 12)
+			var row: int = floori(float(k) / per_row)
+			var in_row: int = mini(per_row, Levels.WORLD_COUNT - row * per_row)
+			var x0: float = dots.size.x * 0.5 - gap * (in_row - 1) * 0.5
+			var c := Vector2(x0 + gap * (k % per_row), 12 + 24 * row)
 			if k + 1 == world:
 				dots.draw_circle(c, r + 4, Ui.INK)
 				dots.draw_circle(c, r, Ui.YELLOW)

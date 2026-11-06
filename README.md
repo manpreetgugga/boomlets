@@ -2,7 +2,7 @@
 
 Pop pods. Blast crates. Outsmart the critters!
 
-Boomlets is a cozy 3D arena game for Android. Help Pip clear fifteen floating worlds: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.
+Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floating worlds: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.
 
 **[Download the latest APK](https://github.com/manpreetgugga/boomlets/releases/latest)** (Android 7+, arm64)
 
@@ -32,6 +32,20 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear fifteen floating wo
 </p>
 <p>
   <img src="shots/world_15.png" width="160" alt="Origami Valley">
+  <img src="shots/world_16.png" width="160" alt="Inkwell Library">
+  <img src="shots/world_17.png" width="160" alt="Paint Plaza">
+  <img src="shots/world_18.png" width="160" alt="Domino Dunes">
+</p>
+<p>
+  <img src="shots/world_19.png" width="160" alt="Slime Lab">
+  <img src="shots/world_20.png" width="160" alt="Pixel Arcade">
+  <img src="shots/world_21.png" width="160" alt="Echo Grotto">
+  <img src="shots/world_22.png" width="160" alt="Comet Orbit">
+</p>
+<p>
+  <img src="shots/world_23.png" width="160" alt="Seasons Grove">
+  <img src="shots/world_24.png" width="160" alt="Mirror Marsh">
+  <img src="shots/world_25.png" width="160" alt="Starlight Summit">
 </p>
 
 ## How to play
@@ -55,7 +69,7 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear fifteen floating wo
 
 ## Worlds
 
-Each world has its own look, music, twist, critter and boss, across six levels. Beat a world's boss to open the next one. There are 270 stars in all.
+Each world has its own look, music, twist, critter and boss, across six levels. Beat a world's boss to open the next one. There are 450 stars in all.
 
 | # | World | Twist | New critter | Boss |
 |---|---|---|---|---|
@@ -74,6 +88,16 @@ Each world has its own look, music, twist, critter and boss, across six levels. 
 | 13 | Rhythm Cloudway | Stepping stones that swap on the music's beat, drum pads | Thumpers | Maestro |
 | 14 | Magnet Mines | Magnets that pull and push pods, switches that flip them | Cartbugs | Magnamole |
 | 15 | Origami Valley | Folds that flip whole panels of the board over | Paper Cranes and Frogs | Origami Dragon |
+| 16 | Inkwell Library | Book stacks to push onto bookmark plates that open shelf-doors | Bookworms | Professor Inkle |
+| 17 | Paint Plaza | Paint tubs dye Pip's blasts; paint crates only break for their own colour | Paint Blobs | Brushbot |
+| 18 | Domino Dunes | Domino lines that topple in a chain and carry the blast round corners | Sand Scarabs | Cleopawtra |
+| 19 | Slime Lab | Slimes that split when blasted, potion vats that slow or freeze critters | Slimes and Lab Rats | King Slime |
+| 20 | Pixel Arcade | Gaps in the edge that wrap Pip, critters and blasts to the other side | Bleepers and Blips | Mega Cabinet |
+| 21 | Echo Grotto | Shell stones that soak up a blast and fire it when Pip sounds the horn | Hermit Crabs | Grand Clam |
+| 22 | Comet Orbit | Asteroids that circle planets as moving walls; spin switches reverse them | UFO Saucers | Moon Whale |
+| 23 | Seasons Grove | The season turns every few seconds: spring bushes, summer reach, autumn leaves, winter ice bridges | Hedgehogs | Season Stag |
+| 24 | Mirror Marsh | A shadow twin across the lake copies every step and every pod | Lily Frogs and Dragonflies | Great Heron |
+| 25 | Starlight Summit | Light every star of a constellation to raise bridges over the sky | Star Sprites and Comet Kittens | Star Owl |
 
 ## Building from source
 
