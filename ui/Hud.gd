@@ -218,7 +218,7 @@ func _draw() -> void:
 	if arena.boss != null:
 		var bar := Rect2(Vector2(w * 0.5 - 200, 262), Vector2(400, 30))
 		_pill(bar, Ui.INK, -1, false)
-		var seg: float = (bar.size.x - 12.0) / Arena.BOSS_HP
+		var seg: float = (bar.size.x - 12.0) / arena.boss_max_hp
 		for k in arena.boss.hp:
 			_pill(Rect2(bar.position + Vector2(6 + k * seg, 5), Vector2(seg - 4, 20)), Ui.RED, -1, false)
 		_text(arena.kit.boss_name(), bar.position + Vector2(200, -16), 20, Ui.INK, 900)

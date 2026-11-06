@@ -67,6 +67,8 @@ var level_id: int = 1
 var data: Dictionary
 ## The world's own look and rules (see worlds/WorldKit.gd).
 var kit: WorldKit
+## Hits the boss takes in this world (the HUD draws one bar segment each).
+var boss_max_hp: int = BOSS_HP
 var _kit_cell := Vector2i(-99, -99)
 var demo: bool = false
 
@@ -400,7 +402,8 @@ func _spawn_critter(kind: StringName, c: Vector2i) -> Critter:
 			cr.node = Models.wisp()
 		&"boss":
 			cr.node = Models.boss()
-			cr.hp = BOSS_HP
+			cr.hp = kit.boss_hp()
+			boss_max_hp = cr.hp
 			cr.think = 5.0
 			boss = cr
 	if custom != null:
@@ -1368,13 +1371,14 @@ func _update_critters(delta: float) -> void:
 		if cr.kind == &"boss":
 			cr.think -= delta
 			if cr.think <= 0.0:
-				cr.think = 6.5 if cr.hp > 3 else 4.5
+				cr.think = 6.5 if cr.hp * 2 > boss_max_hp else 4.5
 				_boss_summon(cr)
-		if flames.has(here) and cr.invuln <= 0.0:
+		var hidden: bool = kit.critter_hidden(cr)
+		if flames.has(here) and cr.invuln <= 0.0 and not hidden:
 			_hit_critter(cr)
 			if not critters.has(cr):
 				continue
-		if not demo and hero_alive and state == &"play":
+		if not demo and hero_alive and state == &"play" and not hidden:
 			var reach: float = 1.0 if cr.kind == &"boss" else 0.62
 			if cr.pos.distance_to(hero_pos) < reach:
 				_hurt_hero()
@@ -1438,7 +1442,7 @@ func _boss_summon(cr: Critter) -> void:
 	for d: Vector2i in DIRS:
 		var c: Vector2i = cr.cell + d
 		if _critter_can_enter(cr, c) and c != hero_cell() and not flames.has(c):
-			var m: Critter = _spawn_critter(&"blobbit", c)
+			var m: Critter = _spawn_critter(kit.boss_minion_kind(), c)
 			m.node.scale = Vector3.ONE * 0.01
 			_spawn_sparkles(Vector3(c.x, 0.4, c.y), Models.BLOBBIT.lightened(0.3))
 			Sfx.play(&"pop")
@@ -1457,7 +1461,7 @@ func _hit_critter(cr: Critter) -> void:
 		_shake = maxf(_shake, 0.3)
 		cr.node.get_node("Body").scale = Vector3(1.35, 0.7, 1.35)
 		if cr.hp > 0:
-			cr.speed = 1.0 + (BOSS_HP - cr.hp) * 0.12
+			cr.speed = 1.0 + (boss_max_hp - cr.hp) * 0.72 / boss_max_hp
 			return
 		boss = null
 		for other: Critter in critters.duplicate():

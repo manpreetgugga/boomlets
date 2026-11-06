@@ -315,17 +315,18 @@ func _build_world_nav(root: Control) -> void:
 	dots.custom_minimum_size = Vector2(0, 24)
 	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dots.draw.connect(func() -> void:
-		var gap: float = 34.0
+		var gap: float = minf(34.0, 260.0 / maxf(Levels.WORLD_COUNT - 1, 1))
+		var r: float = minf(7.0, gap * 0.36)
 		var x0: float = dots.size.x * 0.5 - gap * (Levels.WORLD_COUNT - 1) * 0.5
 		for k in Levels.WORLD_COUNT:
 			var c := Vector2(x0 + gap * k, 12)
 			if k + 1 == world:
-				dots.draw_circle(c, 11, Ui.INK)
-				dots.draw_circle(c, 7, Ui.YELLOW)
+				dots.draw_circle(c, r + 4, Ui.INK)
+				dots.draw_circle(c, r, Ui.YELLOW)
 			elif Save.world_unlocked(k + 1):
-				dots.draw_circle(c, 7, Color(Ui.INK, 0.6))
+				dots.draw_circle(c, r, Color(Ui.INK, 0.6))
 			else:
-				dots.draw_circle(c, 7, Color(Ui.INK, 0.2)))
+				dots.draw_circle(c, r, Color(Ui.INK, 0.2)))
 	box.add_child(dots)
 	pill.add_child(box)
 	nav.add_child(pill)

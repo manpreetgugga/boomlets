@@ -8,7 +8,15 @@ extends RefCounted
 ##
 ## A hook may read and change the arena freely through [member arena]
 ## (hero_pos, tiles via arena.tile()/arena._set_tile(), flames, critters,
-## pods, _spawn_sparkles(), _multimesh(), add_child() and so on).
+## pods, _spawn_sparkles(), _multimesh(), add_child() and so on). These
+## arena helpers are fair game too: _spawn_ring(at, color, size),
+## _spawn_scorch(at), _spawn_confetti(at), _fx (effect list, see
+## _update_fx), _shake (camera shake amount), _hitstop(seconds),
+## _danger_cells(), _kill_critter(cr), _hurt_hero(), _spawn_critter(kind, c),
+## _spawn_pickup(c, kind) and _blast(c, reach). Sounds: Sfx.play(cue) for
+## the built-in cues (boom, crunch, place, pop, hurt, kick, gate, boss_hit,
+## fail); for a world's own sounds add an AudioStreamPlayer child and check
+## Save.sound_on.
 
 ## The arena being built or played. Set before any other hook runs.
 var arena: Arena
@@ -39,6 +47,16 @@ func levels() -> Array[Dictionary]:
 ## Shown over the boss health bar.
 func boss_name() -> String:
 	return "BOSS"
+
+
+## Blasts the boss takes (3–10; the HUD bar has one segment per hit).
+func boss_hp() -> int:
+	return 6
+
+
+## The critter kind the boss calls in every few seconds.
+func boss_minion_kind() -> StringName:
+	return &"blobbit"
 
 
 # --- Building ---------------------------------------------------------------------
@@ -168,6 +186,12 @@ func critter_smart(_kind: StringName) -> bool:
 ## base rules choose.
 func critter_step(_cr: Arena.Critter) -> Vector2i:
 	return Vector2i.ZERO
+
+
+## True while the critter is out of play (underground, phased out, behind
+## glass...): blasts and touching Pip both ignore it.
+func critter_hidden(_cr: Arena.Critter) -> bool:
+	return false
 
 
 ## A blast caught the critter. Return true when handled here (the base

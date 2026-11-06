@@ -17,7 +17,7 @@ extends RefCounted
 ## A world may add its own map characters (see WorldKit.parse_tile and
 ## WorldKit.critter_chars).
 
-const WORLD_COUNT: int = 5
+const WORLD_COUNT: int = 15
 
 static var _kits: Dictionary = {}
 
