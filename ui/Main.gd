@@ -3,7 +3,8 @@ extends Node
 ## the levels themselves. Swaps screens under a soft cream fade, pauses on
 ## Android's back button and when the app goes to the background.
 
-const WORLD: int = 1
+## The world being shown on the map or played.
+var world: int = 1
 
 var arena: Arena
 var hud: Hud
@@ -30,6 +31,9 @@ func _ready() -> void:
 	top.add_child(_fade)
 	Sfx.music(true)
 	var args: PackedStringArray = OS.get_cmdline_user_args()
+	for a: String in args:
+		if a.begins_with("--world="):
+			world = clampi(int(a.get_slice("=", 1)), 1, Levels.WORLD_COUNT)
 	for a: String in args:
 		if a.begins_with("--level="):
 			_start_level(int(a.get_slice("=", 1)))
@@ -74,7 +78,7 @@ func _ensure_demo() -> void:
 		arena.queue_free()
 	arena = Arena.new()
 	add_child(arena)
-	arena.setup(WORLD, 1, true)
+	arena.setup(world, 1, true)
 	arena.process_mode = Node.PROCESS_MODE_ALWAYS
 
 
@@ -116,7 +120,7 @@ func _show_menu() -> void:
 	var stars := Ui.card(Color(Ui.CREAM, 0.94), 30)
 	stars.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	stars.position = Vector2(-230, 40)
-	stars.add_child(Ui.label("★ %d / %d" % [Save.total_stars(), Levels.count(WORLD) * 3], 32, Ui.INK, 900))
+	stars.add_child(Ui.label("★ %d / %d" % [Save.total_stars(), Levels.count(world) * 3], 32, Ui.INK, 900))
 	root.add_child(stars)
 
 	var play := Btn.make("PLAY", &"play", Vector2(440, 140), Ui.YELLOW)
@@ -170,7 +174,7 @@ func _show_map() -> void:
 	head.size = Vector2(440, 0)
 	var hb := VBoxContainer.new()
 	hb.add_child(Ui.label("World 1", 26, Ui.INK_SOFT, 800))
-	hb.add_child(Ui.label(Levels.WORLD_NAMES[WORLD], 46, Ui.INK, 900))
+	hb.add_child(Ui.label(Levels.world_name(world), 46, Ui.INK, 900))
 	head.add_child(hb)
 	root.add_child(head)
 
@@ -188,21 +192,21 @@ func _show_map() -> void:
 				var p: Vector2 = a.lerp(b, (k + 0.5) / 9.0) + Vector2(0, sin((k + 0.5) / 9.0 * PI) * -30.0)
 				trail.draw_circle(p, 8, Color(Ui.CREAM, 0.9)))
 	var next_level: int = 1
-	for i in Levels.count(WORLD):
-		if Save.stars_for(WORLD, i + 1) > 0:
-			next_level = mini(i + 2, Levels.count(WORLD))
-	for i in Levels.count(WORLD):
+	for i in Levels.count(world):
+		if Save.stars_for(world, i + 1) > 0:
+			next_level = mini(i + 2, Levels.count(world))
+	for i in Levels.count(world):
 		var n: int = i + 1
-		var open: bool = Save.is_unlocked(WORLD, n)
-		var info: Dictionary = Levels.get_level(WORLD, n)
-		var fill: Color = Ui.YELLOW if n == next_level else (Ui.MINT if Save.stars_for(WORLD, n) > 0 else Ui.CREAM)
+		var open: bool = Save.is_unlocked(world, n)
+		var info: Dictionary = Levels.get_level(world, n)
+		var fill: Color = Ui.YELLOW if n == next_level else (Ui.MINT if Save.stars_for(world, n) > 0 else Ui.CREAM)
 		if not open:
 			fill = Color("#CFC6BC")
 		var b := Btn.make("" if not open else str(n), &"lock" if not open else &"", Vector2(128, 128), fill)
 		b.font_size = 58
 		b.ink = Ui.INK if open else Ui.INK_SOFT
 		b.caption = info["name"]
-		b.stars = Save.stars_for(WORLD, n) if open else -1
+		b.stars = Save.stars_for(world, n) if open else -1
 		b.position = spots[i] - Vector2(64, 64)
 		if open:
 			b.pressed.connect(func() -> void: _go(_start_level.bind(n)))
@@ -222,16 +226,16 @@ func _show_map() -> void:
 
 func _start_level(n: int) -> void:
 	screen = &"game"
-	level = clampi(n, 1, Levels.count(WORLD))
+	level = clampi(n, 1, Levels.count(world))
 	_clear_ui()
 	if arena != null:
 		arena.queue_free()
 	arena = Arena.new()
 	add_child(arena)
-	arena.setup(WORLD, level, false)
+	arena.setup(world, level, false)
 	hud = Hud.new()
 	hud.arena = arena
-	hud.has_next = level < Levels.count(WORLD)
+	hud.has_next = level < Levels.count(world)
 	hud.restart_requested.connect(func() -> void: _go(_start_level.bind(level)))
 	hud.next_requested.connect(func() -> void: _go(_start_level.bind(level + 1)))
 	hud.map_requested.connect(func() -> void: _go(_show_map))

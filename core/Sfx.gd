@@ -46,12 +46,31 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -10.0
 	add_child(_music)
-	var m: AudioStreamWAV = load("res://audio/music/sorbet_skies.wav")
-	if m != null:
-		m.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		m.loop_begin = 0
-		m.loop_end = int(m.get_length() * m.mix_rate)
-		_music.stream = m
+	track(DEFAULT_TRACK)
+
+
+const DEFAULT_TRACK := "res://audio/music/sorbet_skies.wav"
+var _track: String = ""
+
+
+## Switches the music to a looping .wav ("" for the default tune). Keeps
+## playing if it was playing; does nothing when that track is already on.
+func track(path: String) -> void:
+	if path == "" or not ResourceLoader.exists(path):
+		path = DEFAULT_TRACK
+	if path == _track:
+		return
+	var m: AudioStreamWAV = load(path)
+	if m == null:
+		return
+	_track = path
+	m.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	m.loop_begin = 0
+	m.loop_end = int(m.get_length() * m.mix_rate)
+	var was: bool = _music.playing
+	_music.stream = m
+	if was:
+		_music.play()
 
 
 static func play(cue: StringName, pitch_jitter: float = 0.06) -> void:

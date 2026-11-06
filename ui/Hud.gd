@@ -216,7 +216,7 @@ func _draw() -> void:
 		var seg: float = (bar.size.x - 12.0) / Arena.BOSS_HP
 		for k in arena.boss.hp:
 			_pill(Rect2(bar.position + Vector2(6 + k * seg, 5), Vector2(seg - 4, 20)), Ui.RED, -1, false)
-		_text("THORNBACK", bar.position + Vector2(200, -16), 20, Ui.INK, 900)
+		_text(arena.kit.boss_name(), bar.position + Vector2(200, -16), 20, Ui.INK, 900)
 
 	# The level's tip, for the first few seconds.
 	if _tip_t < 4.5 and arena.data.has("tip"):
@@ -334,7 +334,7 @@ func _on_won(stars: int, seconds: float) -> void:
 	if has_next:
 		buttons.append(["Next", &"next", func() -> void: next_requested.emit(), Ui.YELLOW])
 	else:
-		lines.append("%s cleared!" % Levels.WORLD_NAMES[arena.world_id])
+		lines.append("%s cleared!" % Levels.world_name(arena.world_id))
 	buttons.append(["Replay", &"restart", func() -> void: restart_requested.emit()])
 	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
 	_open_card("Cleared!", buttons, stars, lines)

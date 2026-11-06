@@ -54,6 +54,8 @@ class Critter:
 	var speed: float = 1.5
 	var node: Node3D
 	var hp: int = 1
+	## The model came from the world kit, which also animates it.
+	var custom: bool = false
 	var invuln: float = 0.0
 	var think: float = 6.0
 	var phase: float = 0.0
@@ -63,6 +65,9 @@ class Critter:
 var world_id: int = 1
 var level_id: int = 1
 var data: Dictionary
+## The world's own look and rules (see worlds/WorldKit.gd).
+var kit: WorldKit
+var _kit_cell := Vector2i(-99, -99)
 var demo: bool = false
 
 # The grid.
@@ -142,9 +147,13 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	world_id = world
 	level_id = level
 	demo = demo_mode
-	data = Levels.get_level(world, level)
+	kit = Levels.make_kit(world)
+	kit.arena = self
+	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
 	if not Models.palette_locked:
-		Models.use_palette(Levels.palette(world))
+		Models.use_palette(kit.palette())
+	if not demo_mode:
+		Sfx.track(kit.music())
 	rng.seed = hash(String(data["name"]))
 	# Effects are built from crisp, slightly bevelled blocks to match the
 	# walls: chunky fire cubes, shards and dust cubes rather than soft blobs.
@@ -178,6 +187,7 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 		_marker = Models.walk_marker()
 		_marker.visible = false
 		add_child(_marker)
+	kit.build_extra()
 	camera = Camera3D.new()
 	camera.keep_aspect = Camera3D.KEEP_WIDTH
 	camera.fov = 52.0 if demo else CAM_FOV
@@ -298,6 +308,9 @@ func _parse_map() -> void:
 		for x in W:
 			var c := Vector2i(x, z)
 			var ch: String = row[x] if x < row.length() else "#"
+			if kit.critter_chars().has(ch):
+				spawns.append([StringName(kit.critter_chars()[ch]), c])
+				continue
 			match ch:
 				"#":
 					_set_tile(c, WALL)
@@ -334,6 +347,11 @@ func _parse_map() -> void:
 					if not warp_cells.has(ch):
 						warp_cells[ch] = []
 					warp_cells[ch].append(c)
+				"_":
+					pass
+				_:
+					if not kit.parse_tile(ch, c):
+						push_error("Level %s: unknown map character '%s'" % [data["name"], ch])
 	for key: String in warp_cells:
 		var pair: Array = warp_cells[key]
 		if pair.size() == 2:
@@ -367,9 +385,12 @@ func _spawn_critter(kind: StringName, c: Vector2i) -> Critter:
 	cr.cell = c
 	cr.target = c
 	cr.pos = Vector2(c)
-	cr.speed = CRITTER_SPEED[kind]
+	cr.speed = CRITTER_SPEED[kind] if CRITTER_SPEED.has(kind) else kit.critter_speed(kind)
+	if not CRITTER_SPEED.has(kind):
+		cr.hp = kit.critter_hp(kind)
 	cr.phase = rng.randf() * TAU
 	cr.dir = DIRS[rng.randi() % 4]
+	var custom: Node3D = kit.critter_model(kind)
 	match kind:
 		&"blobbit":
 			cr.node = Models.blobbit()
@@ -382,6 +403,14 @@ func _spawn_critter(kind: StringName, c: Vector2i) -> Critter:
 			cr.hp = BOSS_HP
 			cr.think = 5.0
 			boss = cr
+	if custom != null:
+		if cr.node != null:
+			cr.node.free()
+		cr.node = custom
+		cr.custom = true
+	if cr.node == null:
+		push_error("No model for critter kind %s" % kind)
+		cr.node = Models.blobbit()
 	cr.node.position = _to3(cr.pos)
 	add_child(cr.node)
 	critters.append(cr)
@@ -430,6 +459,7 @@ func _build_environment() -> void:
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 32.0
 	add_child(sun)
+	kit.tune_environment(env, sun)
 
 
 func _multimesh(mesh: Mesh, color: Color, transforms: Array[Transform3D], material: Material = null) -> MultiMesh:
@@ -500,8 +530,10 @@ func _build_world() -> void:
 		caps.append(tf.translated(Vector3(0, 0.31, 0)))
 	_multimesh(Models.box_mesh(Vector3(0.95, 0.62, 0.95), 0.06), Models.EDGE, hedges)
 	_multimesh(Models.box_mesh(Vector3(1.0, 0.13, 1.0), 0.045), Models.EDGE.lightened(0.24), caps)
-	_build_wall_bushes(hedges)
-	_build_rocks(pillars)
+	if not kit.build_wall_topper(hedges):
+		_build_wall_bushes(hedges)
+	if not kit.build_solid_blocks(pillars):
+		_build_rocks(pillars)
 	_crates_mm = _multimesh(Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1), Models.WOOD, crates,
 		Models.glass(Models.WOOD, 0.3) if Models.GLASS else null)
 	var bands: Array[Transform3D] = []
@@ -623,6 +655,10 @@ func _build_props() -> void:
 		Models.part(isle, Models.box_mesh(Vector3(s, 0.5, s), 0.22), Models.RIM, Vector3(0, -0.25, 0))
 		Models.part(isle, Models.box_mesh(Vector3(s * 0.8, 1.0, s * 0.8), 0.3), Models.DIRT, Vector3(0, -0.9, 0))
 		Models.part(isle, Models.box_mesh(Vector3(s * 0.45, 1.0, s * 0.45), 0.25), Models.ROCK, Vector3(0, -1.7, 0))
+		var own: Node3D = kit.far_island_prop(r, s)
+		if own != null:
+			isle.add_child(own)
+			continue
 		var t := Models.tree(r.randf() < 0.5, r)
 		t.scale = Vector3.ONE * 1.3
 		isle.add_child(t)
@@ -632,6 +668,11 @@ func _build_props() -> void:
 
 
 func _rim_prop(p: Vector3, r: RandomNumberGenerator, near_side: bool) -> void:
+	var own: Node3D = kit.rim_prop(p, r, near_side)
+	if own != null:
+		own.position = p
+		add_child(own)
+		return
 	var roll: float = r.randf()
 	var node: Node3D
 	if near_side:
@@ -684,6 +725,7 @@ func _process(delta: float) -> void:
 	_update_pods(delta)
 	_update_flames(delta)
 	_update_critters(delta)
+	kit.process(delta)
 	_update_pickups(delta)
 	_update_fx(delta)
 	_animate_scenery(delta)
@@ -738,7 +780,7 @@ func _update_hero(delta: float) -> void:
 		else:
 			want = _walk_step()
 	if want != Vector2i.ZERO:
-		var dist: float = speed * delta
+		var dist: float = speed * delta * kit.hero_speed_scale(hero_cell())
 		if _try_move(want, dist):
 			moved_dir = want
 		elif want2 != Vector2i.ZERO and _try_move(want2, dist):
@@ -749,6 +791,12 @@ func _update_hero(delta: float) -> void:
 	elif want != Vector2i.ZERO:
 		hero_yaw = atan2(float(want.x), float(want.y))
 	var c: Vector2i = hero_cell()
+	if c != _kit_cell:
+		_kit_cell = c
+		kit.on_hero_enter(c)
+		if state != &"play":
+			return
+		c = hero_cell()
 	if belts.has(c):
 		hero_pos = _move_axis(hero_pos, belts[c], BELT_SPEED * delta, _hero_blocked)
 		c = hero_cell()
@@ -854,7 +902,7 @@ func _hero_search(strict: bool, through_pods: bool) -> Dictionary:
 
 
 func _hero_can_walk(c: Vector2i, strict: bool, through_pods: bool) -> bool:
-	if tile(c) != FLOOR:
+	if tile(c) != FLOOR or kit.blocks(c):
 		return false
 	if strict:
 		if flames.has(c):
@@ -865,7 +913,7 @@ func _hero_can_walk(c: Vector2i, strict: bool, through_pods: bool) -> bool:
 
 
 func _hero_blocked(c: Vector2i) -> bool:
-	if tile(c) != FLOOR:
+	if tile(c) != FLOOR or kit.blocks(c):
 		return true
 	if pod_at.has(c) and not hero_pass.has(pod_at[c]):
 		return true
@@ -1002,7 +1050,7 @@ func drop_pod(at: Vector2i = NO_CELL) -> void:
 
 
 func _pod_blocked(c: Vector2i) -> bool:
-	if tile(c) != FLOOR or pod_at.has(c):
+	if tile(c) != FLOOR or pod_at.has(c) or kit.blocks(c):
 		return true
 	if not demo and hero_alive and hero_cell() == c:
 		return true
@@ -1065,6 +1113,7 @@ func _explode(p: Pod) -> void:
 	hero_pass.erase(p)
 	p.node.queue_free()
 	_blast(p.cell, p.fire)
+	kit.on_explode(p.cell)
 	_spawn_ring(Vector3(p.cell.x, 0.06, p.cell.y), Models.FLAME_CORE, 1.0 + p.fire * 0.4)
 	_spawn_scorch(Vector3(p.cell.x, 0.012, p.cell.y))
 	Sfx.play(&"boom", 0.1)
@@ -1094,6 +1143,12 @@ func _blast(c: Vector2i, reach: int) -> void:
 			var t: int = tile(cc)
 			if t == WALL:
 				break
+			var own: int = kit.flame_stop(cc)
+			if own == 2:
+				break
+			if own == 1:
+				_add_flame(cc, i, d)
+				break
 			if t == CRATE:
 				_add_flame(cc, i, d)
 				_break_crate(cc)
@@ -1111,6 +1166,7 @@ func _blast(c: Vector2i, reach: int) -> void:
 
 func _add_flame(c: Vector2i, dist: int, dir: Vector2i) -> void:
 	flames[c] = FLAME_TIME
+	kit.on_flame(c)
 	# A cluster of tumbling fire cubes round a white-hot core cube. Arms lay
 	# their cubes along the blast line so the beam reads as solid.
 	var node := Node3D.new()
@@ -1277,7 +1333,7 @@ func _critter_can_enter(cr: Critter, c: Vector2i) -> bool:
 		return false
 	if pod_at.has(c):
 		return false
-	return true
+	return kit.critter_can_enter(cr, c)
 
 
 func _update_critters(delta: float) -> void:
@@ -1327,8 +1383,11 @@ func _choose_dir(cr: Critter) -> Vector2i:
 			open.append(d)
 	if open.is_empty():
 		return Vector2i.ZERO
+	var own: Vector2i = kit.critter_step(cr)
+	if own != Vector2i.ZERO and open.has(own):
+		return own
 	var hc: Vector2i = hero_cell() if not demo else Vector2i(-99, -99)
-	var smart: bool = cr.kind == &"buzzer" or cr.kind == &"boss"
+	var smart: bool = cr.kind == &"buzzer" or cr.kind == &"boss" or kit.critter_smart(cr.kind)
 	if smart:
 		var danger: Dictionary = _danger_cells()
 		var safe: Array = open.filter(func(d: Vector2i) -> bool: return not danger.has(cr.cell + d))
@@ -1383,6 +1442,8 @@ func _boss_summon(cr: Critter) -> void:
 
 
 func _hit_critter(cr: Critter) -> void:
+	if kit.critter_hit(cr):
+		return
 	if cr.kind == &"boss":
 		cr.hp -= 1
 		cr.invuln = 1.6
@@ -1429,7 +1490,10 @@ func _pose_critter(cr: Critter, delta: float) -> void:
 	var t: float = _clock * 1.0 + cr.phase
 	n.scale = n.scale.lerp(Vector3.ONE, minf(delta * 8.0, 1.0))
 	var rest := Vector3.ONE
-	match cr.kind:
+	var kind: StringName = &"" if cr.custom else cr.kind
+	if cr.kind == &"boss":
+		body.visible = cr.invuln <= 0.0 or fmod(_clock, 0.14) < 0.08
+	match kind:
 		&"blobbit":
 			rest = Vector3(1.0 + sin(t * 9.0) * 0.07, 1.0 - sin(t * 9.0) * 0.1, 1.0 + sin(t * 9.0) * 0.07)
 		&"buzzer":
@@ -1441,7 +1505,8 @@ func _pose_critter(cr: Critter, delta: float) -> void:
 			body.rotation.z = sin(t * 1.7) * 0.15
 		&"boss":
 			rest = Vector3(1.0, 1.0 + absf(sin(t * 4.0)) * 0.06, 1.0)
-			body.visible = cr.invuln <= 0.0 or fmod(_clock, 0.14) < 0.08
+		_:
+			rest = kit.pose_critter(cr, body, t, delta)
 	body.scale = body.scale.lerp(rest, minf(delta * 9.0, 1.0))
 
 

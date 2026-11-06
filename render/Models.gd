@@ -104,17 +104,16 @@ static var palette_locked: bool = false
 
 ## Switches every colour to [param name]'s palette (see [constant PALETTES]).
 ## Call before building an arena.
-static func use_palette(name: String) -> void:
+static func use_palette(name: Variant) -> void:
 	var script: GDScript = load("res://render/Models.gd")
-	if _defaults.is_empty():
-		for pal_name: String in PALETTES:
-			for key: String in PALETTES[pal_name]:
-				if not _defaults.has(key):
-					_defaults[key] = script.get(key)
 	for key: String in _defaults:
 		script.set(key, _defaults[key])
-	var pal: Dictionary = PALETTES.get(name, {})
+	var pal: Dictionary = name if name is Dictionary else PALETTES.get(name, {})
 	for key: String in pal:
+		# Only keys stored here are ever changed, so an unseen key still holds
+		# its default.
+		if not _defaults.has(key):
+			_defaults[key] = script.get(key)
 		var v: Variant = pal[key]
 		script.set(key, Color(v) if v is String else v)
 
