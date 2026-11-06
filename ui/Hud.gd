@@ -17,6 +17,8 @@ const DOUBLE_TAP_MS: int = 300
 const DOUBLE_TAP_DIST: float = 120.0
 
 var arena: Arena
+## Whether the win card offers Next: another level in this world, or the
+## next world after its last level.
 var has_next: bool = false
 ## Off when a test script drives the arena directly.
 var auto_input: bool = true
@@ -33,6 +35,7 @@ var _card: Control
 var _card_stars: int = -1
 var _card_t: float = 0.0
 var _star_ctrl: Control
+var _confetti: Control
 var _pause_btn: Btn
 var _clock: float = 0.0
 
@@ -108,6 +111,8 @@ func _process(delta: float) -> void:
 		_card_t += delta
 		if _star_ctrl != null:
 			_star_ctrl.queue_redraw()
+		if _confetti != null:
+			_confetti.queue_redraw()
 	_feed_input()
 	queue_redraw()
 
@@ -302,6 +307,7 @@ func _close_card() -> void:
 		_card.queue_free()
 		_card = null
 		_star_ctrl = null
+		_confetti = null
 
 
 func open_pause() -> void:
@@ -324,20 +330,64 @@ func _resume() -> void:
 
 
 func _on_won(stars: int, seconds: float) -> void:
-	var better: bool = Save.record(arena.world_id, arena.level_id, stars, seconds)
+	var w: int = arena.world_id
+	var world_done: bool = arena.level_id >= Levels.count(w)
+	var first_clear: bool = Save.stars_for(w, arena.level_id) == 0
+	var better: bool = Save.record(w, arena.level_id, stars, seconds)
 	_pause_btn.visible = false
-	var best: float = float(Save.best_time.get(Save.key(arena.world_id, arena.level_id), seconds))
+	var best: float = float(Save.best_time.get(Save.key(w, arena.level_id), seconds))
 	var lines: Array = ["Time %s   Best %s" % [Ui.time_text(seconds), Ui.time_text(best)]]
 	if better:
 		lines.append("New best!")
+	var title: String = "Cleared!"
 	var buttons: Array = []
+	if world_done:
+		# The boss is down: the world is done and the next one opens.
+		title = "World cleared!" if w < Levels.WORLD_COUNT else "You did it!"
+		if w < Levels.WORLD_COUNT:
+			var next_name: String = Levels.world_name(w + 1)
+			lines.append("%s unlocked!" % next_name if first_clear else "On to %s!" % next_name)
+		else:
+			lines.append("Every world cleared!")
+			lines.append("★ %d / %d" % [Save.total_stars(), Levels.WORLD_COUNT * 6 * 3])
 	if has_next:
-		buttons.append(["Next", &"next", func() -> void: next_requested.emit(), Ui.YELLOW])
-	else:
-		lines.append("%s cleared!" % Levels.world_name(arena.world_id))
+		buttons.append(["Next world" if world_done else "Next", &"next", func() -> void: next_requested.emit(), Ui.YELLOW])
 	buttons.append(["Replay", &"restart", func() -> void: restart_requested.emit()])
 	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
-	_open_card("Cleared!", buttons, stars, lines)
+	if world_done and not has_next:
+		buttons.append(["Home", &"home", func() -> void: home_requested.emit()])
+	_open_card(title, buttons, stars, lines)
+	if world_done:
+		_add_confetti()
+
+
+## Paper confetti tumbling down over the card, for finishing a world.
+func _add_confetti() -> void:
+	var cols: Array[Color] = [Ui.YELLOW, Ui.PINK, Ui.MINT, Ui.ORANGE, Color("#8FB8F0"), Ui.STAR]
+	var bits: Array[Dictionary] = []
+	var r := RandomNumberGenerator.new()
+	r.seed = 7
+	for k in 90:
+		bits.append({"x": r.randf(), "y": -r.randf_range(0.02, 0.9), "v": r.randf_range(0.16, 0.3),
+			"sway": r.randf_range(10.0, 40.0), "ph": r.randf() * TAU, "spin": r.randf_range(2.0, 7.0),
+			"s": r.randf_range(12.0, 22.0), "c": cols[k % cols.size()]})
+	var layer := Control.new()
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card.add_child(layer)
+	layer.draw.connect(func() -> void:
+		var t: float = _card_t
+		for b: Dictionary in bits:
+			var y: float = (float(b["y"]) + t * float(b["v"])) * layer.size.y
+			if y < -30.0 or y > layer.size.y + 30.0:
+				continue
+			var x: float = float(b["x"]) * layer.size.x + sin(t * 2.0 + float(b["ph"])) * float(b["sway"])
+			var a: float = t * float(b["spin"]) + float(b["ph"])
+			var s: float = float(b["s"])
+			layer.draw_set_transform(Vector2(x, y), a, Vector2(1.0, absf(cos(a * 0.7)) * 0.8 + 0.2))
+			layer.draw_rect(Rect2(-s * 0.5, -s * 0.3, s, s * 0.6), b["c"])
+		layer.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE))
+	_confetti = layer
 
 
 func _on_lost(reason: String) -> void:

@@ -2,21 +2,26 @@
 
 Pop pods. Blast crates. Outsmart the critters!
 
-Boomlets is a cozy 3D arena game for Android. Help Pip clear floating sky islands: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.
+Boomlets is a cozy 3D arena game for Android. Help Pip clear five floating worlds: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.
 
 **[Download the latest APK](https://github.com/manpreetgugga/boomlets/releases/latest)** (Android 7+, arm64)
 
 <p>
-  <img src="shots/menu.png" width="200" alt="Main menu">
-  <img src="shots/l3_belt.png" width="200" alt="Belt Bay">
-  <img src="shots/l4_chain.png" width="200" alt="Barrel chain reaction">
-  <img src="shots/l6_boss.png" width="200" alt="Boss fight">
+  <img src="shots/menu.png" width="160" alt="Main menu">
+  <img src="shots/map.png" width="160" alt="World map">
+  <img src="shots/world_1.png" width="160" alt="Meadow Isles">
+  <img src="shots/world_2.png" width="160" alt="Candy Coast">
+</p>
+<p>
+  <img src="shots/world_3.png" width="160" alt="Cocoa Canyon">
+  <img src="shots/world_4.png" width="160" alt="Frost Peaks">
+  <img src="shots/world_5.png" width="160" alt="Neon Nightway">
 </p>
 
 ## How to play
 
-- **Move:** drag anywhere on the left half of the screen.
-- **Drop a pod:** tap the right half.
+- **Walk:** tap a tile and Pip walks there.
+- **Drop a pod:** double-tap anywhere.
 - Pods pop after 2.5 seconds and blast in a plus shape. Blasts set off other pods.
 - Pop every critter to open the exit pad, then walk onto it.
 - Finish quickly for 3 stars.
@@ -32,16 +37,17 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear floating sky island
 | Shield | Blocks one hit |
 | Heart | Extra life |
 
-## World 1: Meadow Isles
+## Worlds
 
-| # | Level | New twist |
-|---|---|---|
-| 1 | Fizzy Start | The basics |
-| 2 | Buzz Lane | Buzzers that chase you |
-| 3 | Belt Bay | Conveyor belts that carry you and your pods |
-| 4 | Barrel Bash | Fizz barrels that blow up in chains |
-| 5 | Warp Woods | Warp pads and Wisps that float through crates |
-| 6 | Thornback's Hill | Boss fight |
+Each world has its own look, music, twist, critter and boss, across six levels. Beat a world's boss to open the next one. There are 90 stars in all.
+
+| # | World | Twist | New critter | Boss |
+|---|---|---|---|---|
+| 1 | Meadow Isles | Conveyor belts, fizz barrels, warp pads | Buzzers and Wisps | Thornback |
+| 2 | Candy Coast | Tide pools that flood and drain | Crabs that walk sideways | Captain Clawdia |
+| 3 | Cocoa Canyon | Sticky mud and tiles that crumble into pits | Moles that tunnel | Baron Burrow |
+| 4 | Frost Peaks | Slippery ice and frozen crates that take two blasts | Rolling Snowpuffs | Big Brrr |
+| 5 | Neon Nightway | Light gates opened by matching switches | Dashing Zappers | Gigabolt |
 
 ## Building from source
 
@@ -56,11 +62,12 @@ The signed release build uses `tools/build_release.ps1`. It asks for the keystor
 | Folder | Contents |
 |---|---|
 | `game/` | Arena rules: movement, pods, blasts, critters, boss |
-| `core/` | Levels, save file, sound |
+| `core/` | World registry, save file, sound |
+| `worlds/` | One script per world: its levels, look, rules, critters and boss (`WorldKit.gd` lists the hooks) |
 | `render/` | Clay models built in code |
 | `ui/` | Menu, level map, HUD and buttons |
-| `shaders/` | Clay, sky and shadow shaders |
-| `tools/` | Screenshot, icon and release build scripts |
+| `shaders/` | Clay, glass, sky and shadow shaders |
+| `tools/` | Screenshot, music, icon and release build scripts |
 
 ## Credits
 

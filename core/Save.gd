@@ -10,6 +10,8 @@ var best_time: Dictionary = {}  # "1-3" -> seconds
 var music_on: bool = true
 var sound_on: bool = true
 var haptics_on: bool = true
+## The world played last; the menu's Play button opens its map.
+var last_world: int = 1
 
 
 func _ready() -> void:
@@ -25,7 +27,26 @@ func stars_for(world: int, level: int) -> int:
 
 
 func is_unlocked(world: int, level: int) -> bool:
-	return level <= 1 or stars.has(key(world, level - 1))
+	if level <= 1:
+		return world_unlocked(world)
+	return stars.has(key(world, level - 1))
+
+
+## World 1 is always open; every other world opens once the one before it
+## has its last level (the boss) cleared.
+func world_unlocked(world: int) -> bool:
+	return world <= 1 or world_cleared(world - 1)
+
+
+func world_cleared(world: int) -> bool:
+	return stars.has(key(world, Levels.count(world)))
+
+
+func world_stars(world: int) -> int:
+	var total: int = 0
+	for n in Levels.count(world):
+		total += stars_for(world, n + 1)
+	return total
 
 
 func total_stars() -> int:
@@ -49,6 +70,7 @@ func write() -> void:
 	var data: Dictionary = {
 		"version": 1, "stars": stars, "best_time": best_time,
 		"music": music_on, "sound": sound_on, "haptics": haptics_on,
+		"world": last_world,
 	}
 	var tmp: String = PATH + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
@@ -71,6 +93,7 @@ func _load() -> void:
 	music_on = bool(d.get("music", true))
 	sound_on = bool(d.get("sound", true))
 	haptics_on = bool(d.get("haptics", true))
+	last_world = clampi(int(d.get("world", 1)), 1, Levels.WORLD_COUNT)
 
 
 func buzz(ms: int) -> void:

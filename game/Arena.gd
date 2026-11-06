@@ -771,7 +771,7 @@ func _update_hero(delta: float) -> void:
 		if settle != NO_CELL:
 			# On the goal (or a warp pad): ease onto the middle of the tile.
 			var before: Vector2 = hero_pos
-			hero_pos = hero_pos.move_toward(Vector2(settle), speed * delta)
+			hero_pos = hero_pos.move_toward(Vector2(settle), speed * delta * kit.hero_speed_scale(hero_cell()))
 			var step: Vector2 = hero_pos - before
 			if step.length_squared() > 1e-8:
 				moved_dir = Vector2i(roundi(signf(step.x)), 0) if absf(step.x) > absf(step.y) else Vector2i(0, roundi(signf(step.y)))
@@ -1275,7 +1275,12 @@ func _danger_cells() -> Dictionary:
 				var cc: Vector2i = p.cell + d * i
 				if tile(cc) != FLOOR:
 					break
+				var own: int = kit.flame_stop(cc)
+				if own == 2:
+					break
 				_danger[cc] = true
+				if own == 1:
+					break
 	return _danger
 
 

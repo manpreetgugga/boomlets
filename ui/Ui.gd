@@ -142,6 +142,12 @@ static func draw_icon(ci: CanvasItem, icon: StringName, c: Vector2, s: float, co
 		&"back":
 			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-h * 0.7, 0), c + Vector2(0, -h * 0.6), c + Vector2(0, h * 0.6)]), color)
 			ci.draw_rect(Rect2(c + Vector2(-h * 0.1, -h * 0.2), Vector2(h * 0.75, h * 0.4)), color)
+		&"left", &"right":
+			var d: float = -1.0 if icon == &"left" else 1.0
+			ci.draw_polyline(PackedVector2Array([c + Vector2(-d * h * 0.22, -h * 0.6), c + Vector2(d * h * 0.38, 0), c + Vector2(-d * h * 0.22, h * 0.6)]), color, h * 0.3, true)
+			ci.draw_circle(c + Vector2(-d * h * 0.22, -h * 0.6), h * 0.15, color)
+			ci.draw_circle(c + Vector2(d * h * 0.38, 0), h * 0.15, color)
+			ci.draw_circle(c + Vector2(-d * h * 0.22, h * 0.6), h * 0.15, color)
 		&"star":
 			ci.draw_colored_polygon(star_points(c, h), color)
 		&"heart":
