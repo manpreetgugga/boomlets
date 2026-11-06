@@ -19,6 +19,16 @@ const BELT_SPEED: float = 2.2
 const KICK_SPEED: float = 7.5
 const BARREL_FIRE: int = 3
 const BOSS_HP: int = 6
+const BASE_SPEED: float = 3.6
+const SPEED_STEP: float = 0.5
+const MAX_SPEED: float = 5.6
+const NO_CELL := Vector2i(-1, -1)
+## Camera: horizontal field of view, and how steeply it looks down.
+const CAM_FOV: float = 34.0
+const CAM_DIR := Vector3(0.0, 11.0, 5.0)
+## Screen space (in 720-wide UI pixels) the HUD covers at the top; the arena
+## is centred in the space below it.
+const HUD_TOP: float = 170.0
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1, &"boss": 1.0}
 
@@ -84,8 +94,10 @@ var hero_yaw: float = 0.0
 var lives: int = 3
 var max_pods: int = 1
 var fire: int = 2
-var speed: float = 3.2
+var speed: float = BASE_SPEED
 var can_kick: bool = false
+## The tile Pip is walking to after a tap, or NO_CELL.
+var walk_goal: Vector2i = NO_CELL
 var shield: bool = false
 var pods_out: int = 0
 var deaths: int = 0
@@ -114,8 +126,14 @@ var _warp_nodes: Array[Node3D] = []
 var _exit_node: Node3D
 var _shield_node: MeshInstance3D
 var _fx: Array[Dictionary] = []
-var _flame_mesh: SphereMesh
-var _smoke_mat: ShaderMaterial
+var _flame_mesh: Mesh
+var _spark_mesh: Mesh
+var _smoke_mesh: Mesh
+var _plank_mesh: Mesh
+var _ring_mesh: Mesh
+var _scorch_mesh: Mesh
+var _marker: Node3D
+var _marker_t: float = 0.0
 
 
 ## Builds level [param level] of world [param world]. A [param demo_mode]
@@ -125,8 +143,28 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	level_id = level
 	demo = demo_mode
 	data = Levels.get_level(world, level)
+	if not Models.palette_locked:
+		Models.use_palette(Levels.palette(world))
 	rng.seed = hash(String(data["name"]))
-	_flame_mesh = Models.sphere(0.5, 0.8, 16)
+	# Effects are built from crisp, slightly bevelled blocks to match the
+	# walls: chunky fire cubes, shards and dust cubes rather than soft blobs.
+	_flame_mesh = Models.box_mesh(Vector3(0.42, 0.42, 0.42), 0.06)
+	_spark_mesh = Models.box_mesh(Vector3(0.1, 0.1, 0.1), 0.015)
+	_smoke_mesh = Models.box_mesh(Vector3(0.3, 0.3, 0.3), 0.05)
+	_plank_mesh = Models.box_mesh(Vector3(0.52, 0.11, 0.19), 0.03)
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.42
+	ring.outer_radius = 0.5
+	ring.rings = 32
+	ring.ring_segments = 4
+	_ring_mesh = ring
+	var scorch := CylinderMesh.new()
+	scorch.top_radius = 0.42
+	scorch.bottom_radius = 0.42
+	scorch.height = 0.02
+	scorch.radial_segments = 8
+	scorch.rings = 1
+	_scorch_mesh = scorch
 	_build_environment()
 	_parse_map()
 	_build_world()
@@ -137,9 +175,12 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 		hero_pos = Vector2(start_cell)
 		hero.position = _to3(hero_pos)
 		_build_shield()
+		_marker = Models.walk_marker()
+		_marker.visible = false
+		add_child(_marker)
 	camera = Camera3D.new()
 	camera.keep_aspect = Camera3D.KEEP_WIDTH
-	camera.fov = 52.0
+	camera.fov = 52.0 if demo else CAM_FOV
 	camera.near = 0.5
 	camera.far = 120.0
 	add_child(camera)
@@ -152,6 +193,55 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 func set_input(primary: Vector2i, secondary: Vector2i) -> void:
 	input_primary = primary
 	input_secondary = secondary
+	if primary != Vector2i.ZERO:
+		walk_goal = NO_CELL
+
+
+## The arena tile under a point on the screen (the arena edge when the point
+## is off the arena), or NO_CELL.
+func cell_at_screen(p: Vector2) -> Vector2i:
+	if camera == null:
+		return NO_CELL
+	var o: Vector3 = camera.project_ray_origin(p)
+	var d: Vector3 = camera.project_ray_normal(p)
+	if d.y > -0.01:
+		return NO_CELL
+	# Aim at roughly knee height so tapping the top of a block or critter
+	# still picks its tile.
+	var hit: Vector3 = o + d * ((0.3 - o.y) / d.y)
+	return Vector2i(clampi(roundi(hit.x), 1, W - 2), clampi(roundi(hit.z), 1, H - 2))
+
+
+## Sends Pip toward the tile under [param screen_pos].
+func walk_to_screen(screen_pos: Vector2) -> void:
+	var c: Vector2i = cell_at_screen(screen_pos)
+	if c != NO_CELL:
+		walk_to(c)
+
+
+## Sends Pip toward [param c], or the closest tile to it he can get to.
+func walk_to(c: Vector2i) -> void:
+	if demo or hero == null or state != &"play":
+		return
+	# Choose the goal ignoring pods and flames (they will clear), so a tap
+	# behind a pod still means "go there".
+	var r: Dictionary = _hero_search(false, true)
+	var dist: Dictionary = r["dist"]
+	var best: Vector2i = hero_cell()
+	var best_score: int = 1 << 30
+	for cell: Vector2i in dist:
+		var score: int = (absi(cell.x - c.x) + absi(cell.y - c.y)) * 1000 + int(dist[cell])
+		if score < best_score:
+			best_score = score
+			best = cell
+	set_walk_goal(best)
+	_marker_t = 0.0
+
+
+func set_walk_goal(c: Vector2i) -> void:
+	walk_goal = c
+	input_primary = Vector2i.ZERO
+	input_secondary = Vector2i.ZERO
 
 
 func critters_left() -> int:
@@ -301,11 +391,11 @@ func _spawn_critter(kind: StringName, c: Vector2i) -> Critter:
 func _build_environment() -> void:
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = preload("res://shaders/sky_gradient.gdshader")
-	sky_mat.set_shader_parameter(&"top_color", Color("#8EC5EC"))
-	sky_mat.set_shader_parameter(&"horizon_color", Color("#FCEFD9"))
-	sky_mat.set_shader_parameter(&"ground_color", Color("#D6E2DC"))
-	sky_mat.set_shader_parameter(&"cloud_amount", 0.6)
-	sky_mat.set_shader_parameter(&"cloud_color", Color("#FFFFFF"))
+	sky_mat.set_shader_parameter(&"top_color", Models.SKY_TOP)
+	sky_mat.set_shader_parameter(&"horizon_color", Models.SKY_HORIZON)
+	sky_mat.set_shader_parameter(&"ground_color", Models.SKY_GROUND)
+	sky_mat.set_shader_parameter(&"cloud_amount", Models.CLOUDS)
+	sky_mat.set_shader_parameter(&"cloud_color", Models.CLOUD)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_64
@@ -313,8 +403,8 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#AFC8EA")
-	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Models.AMBIENT
+	env.ambient_light_energy = Models.AMBIENT_ENERGY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_white = 6.0
@@ -327,12 +417,12 @@ func _build_environment() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-	var sky_c: Color = Color("#8EC5EC").srgb_to_linear()
+	var sky_c: Color = Models.SKY_TOP.srgb_to_linear()
 	RenderingServer.global_shader_parameter_set(&"sky_tint", Vector3(sky_c.r, sky_c.g, sky_c.b))
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, -30.0, 0.0)
-	sun.light_color = Color("#FFF0DC")
-	sun.light_energy = 1.55
+	sun.light_color = Models.SUN
+	sun.light_energy = Models.SUN_ENERGY
 	sun.shadow_enabled = true
 	sun.shadow_blur = 2.5
 	sun.shadow_bias = 0.03
@@ -342,7 +432,7 @@ func _build_environment() -> void:
 	add_child(sun)
 
 
-func _multimesh(mesh: Mesh, color: Color, transforms: Array[Transform3D]) -> MultiMesh:
+func _multimesh(mesh: Mesh, color: Color, transforms: Array[Transform3D], material: Material = null) -> MultiMesh:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -351,7 +441,7 @@ func _multimesh(mesh: Mesh, color: Color, transforms: Array[Transform3D]) -> Mul
 		mm.set_instance_transform(i, transforms[i])
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
-	mmi.material_override = Models.mat(color)
+	mmi.material_override = material if material != null else Models.mat(color)
 	add_child(mmi)
 	return mm
 
@@ -363,7 +453,7 @@ func _build_world() -> void:
 	# rock tapering down to a point.
 	var island := Node3D.new()
 	add_child(island)
-	Models.part(island, Models.box_mesh(Vector3(W + 2.2, 0.5, H + 2.2), 0.25), Models.GRASS_B, Vector3(cx, -0.27, cz))
+	Models.part(island, Models.box_mesh(Vector3(W + 2.2, 0.5, H + 2.2), 0.25), Models.RIM, Vector3(cx, -0.27, cz))
 	Models.part(island, Models.box_mesh(Vector3(W + 1.9, 1.3, H + 1.9), 0.4), Models.DIRT, Vector3(cx, -1.05, cz))
 	Models.part(island, Models.box_mesh(Vector3(W - 1.0, 1.6, H - 1.0), 0.6), Models.ROCK, Vector3(cx, -2.3, cz))
 	Models.part(island, Models.box_mesh(Vector3(W - 5.0, 1.6, H - 5.0), 0.6), Models.ROCK.darkened(0.08), Vector3(cx, -3.6, cz))
@@ -380,7 +470,7 @@ func _build_world() -> void:
 			var border: bool = x == 0 or z == 0 or x == W - 1 or z == H - 1
 			var p := Vector3(x, 0, z)
 			if border:
-				hedges.append(Transform3D(Basis(), p + Vector3(0, 0.36, 0)))
+				hedges.append(Transform3D(Basis(), p + Vector3(0, 0.31, 0)))
 				continue
 			if not belts.has(c):
 				var tf := Transform3D(Basis(), p + Vector3(0, -0.15, 0))
@@ -403,13 +493,22 @@ func _build_world() -> void:
 	var tile_mesh := Models.box_mesh(Vector3(0.96, 0.3, 0.96), 0.08)
 	_multimesh(tile_mesh, Models.GRASS_A, floor_a)
 	_multimesh(tile_mesh, Models.GRASS_B, floor_b)
-	_multimesh(Models.box_mesh(Vector3(1.0, 0.72, 1.0), 0.3), Color("#5FA85A"), hedges)
-	_multimesh(Models.box_mesh(Vector3(0.9, 0.8, 0.9), 0.16), Models.STONE, pillars)
-	_crates_mm = _multimesh(Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1), Models.WOOD, crates)
+	# The border reads as stacked blocks with a lighter coping on top, and the
+	# pillars get a cap too, so walls have crisp edges instead of soft lumps.
+	var caps: Array[Transform3D] = []
+	for tf in hedges:
+		caps.append(tf.translated(Vector3(0, 0.31, 0)))
+	_multimesh(Models.box_mesh(Vector3(0.95, 0.62, 0.95), 0.06), Models.EDGE, hedges)
+	_multimesh(Models.box_mesh(Vector3(1.0, 0.13, 1.0), 0.045), Models.EDGE.lightened(0.24), caps)
+	_build_wall_bushes(hedges)
+	_build_rocks(pillars)
+	_crates_mm = _multimesh(Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1), Models.WOOD, crates,
+		Models.glass(Models.WOOD, 0.3) if Models.GLASS else null)
 	var bands: Array[Transform3D] = []
 	for tf in crates:
 		bands.append(tf)
-	_bands_mm = _multimesh(Models.box_mesh(Vector3(0.88, 0.14, 0.88), 0.05), Models.WOOD_DARK, bands)
+	_bands_mm = _multimesh(Models.box_mesh(Vector3(0.88, 0.14, 0.88), 0.05), Models.WOOD_DARK, bands,
+		Models.glass(Models.WOOD_DARK, 0.7, 0.15) if Models.GLASS else null)
 
 	# Belts: a dark slab with chevrons that run along it.
 	var chev := Models.chevron_mesh()
@@ -445,6 +544,67 @@ func _build_world() -> void:
 		flag.position.y = 0.4
 
 
+func _build_rocks(spots: Array[Transform3D]) -> void:
+	# Each solid block is a little rock pile: a wide boulder, a smaller one
+	# stacked off-centre on top and sometimes a pebble at its foot. Random
+	# turns and tilts keep every pile different.
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(String(data["name"])) + 11
+	var lows: Array[Transform3D] = []
+	var highs: Array[Transform3D] = []
+	var pebbles: Array[Transform3D] = []
+	for tf in spots:
+		var p: Vector3 = Vector3(tf.origin.x, 0, tf.origin.z)
+		var b := Basis(Vector3.UP, r.randf_range(-0.35, 0.35)).scaled(Vector3(r.randf_range(0.95, 1.05), r.randf_range(0.9, 1.1), r.randf_range(0.95, 1.05)))
+		lows.append(Transform3D(b, p + Vector3(0, 0.26, 0)))
+		var tilt := Basis(Vector3.UP, r.randf() * TAU) * Basis(Vector3.RIGHT, r.randf_range(-0.14, 0.14)) * Basis(Vector3.FORWARD, r.randf_range(-0.14, 0.14))
+		highs.append(Transform3D(tilt, p + Vector3(r.randf_range(-0.09, 0.09), 0.62, r.randf_range(-0.09, 0.09))))
+		if r.randf() < 0.6:
+			var a: float = r.randf() * TAU
+			pebbles.append(Transform3D(Basis(Vector3.UP, r.randf() * TAU), p + Vector3(cos(a) * 0.36, 0.1, sin(a) * 0.36)))
+	_multimesh(Models.box_mesh(Vector3(0.86, 0.52, 0.86), 0.2), Models.STONE.darkened(0.1), lows)
+	_multimesh(Models.box_mesh(Vector3(0.6, 0.42, 0.58), 0.18), Models.STONE, highs)
+	_multimesh(Models.box_mesh(Vector3(0.28, 0.2, 0.26), 0.09), Models.STONE.darkened(0.2), pebbles)
+
+
+func _build_wall_bushes(blocks: Array[Transform3D]) -> void:
+	# Little leafy tufts (some with flowers) growing on top of the border
+	# wall. Batched into a few multimeshes so they cost next to nothing.
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(String(data["name"])) + 3
+	var leaf_a: Array[Transform3D] = []
+	var leaf_b: Array[Transform3D] = []
+	var blooms: Array[Array] = [[], [], []]
+	var top: float = 0.68
+	for tf in blocks:
+		if r.randf() > 0.72:
+			continue
+		var base: Vector3 = tf.origin
+		var n: int = r.randi_range(3, 4)
+		for k in n:
+			var a: float = TAU * k / n + r.randf()
+			var s: float = r.randf_range(0.75, 1.1)
+			var at := Vector3(base.x + cos(a) * 0.17, top + 0.1 * s, base.z + sin(a) * 0.17)
+			var leaf := Transform3D(Basis().scaled(Vector3(s, s * 0.8, s)), at)
+			if r.randf() < 0.5:
+				leaf_a.append(leaf)
+			else:
+				leaf_b.append(leaf)
+		if r.randf() < 0.45:
+			for k in 2:
+				var at := Vector3(base.x + r.randf_range(-0.18, 0.18), top + 0.26, base.z + r.randf_range(-0.18, 0.18))
+				(blooms[r.randi() % 3] as Array).append(Transform3D(Basis(), at))
+	var leaf_mesh := Models.sphere(0.21, -1, 12)
+	_multimesh(leaf_mesh, Models.LEAFY_A, leaf_a)
+	_multimesh(leaf_mesh, Models.LEAFY_B, leaf_b)
+	var bloom_mesh := Models.sphere(0.045, -1, 6)
+	var bloom_colors: Array[Color] = [Color("#FF8FA3"), Color("#FFE27A"), Models.WHITE]
+	for i in 3:
+		var list: Array[Transform3D] = []
+		list.assign(blooms[i])
+		_multimesh(bloom_mesh, bloom_colors[i], list)
+
+
 func _build_props() -> void:
 	# Decor on the grassy rim and a few far-off islands for depth.
 	var r := RandomNumberGenerator.new()
@@ -460,7 +620,7 @@ func _build_props() -> void:
 		isle.position = spec[0]
 		add_child(isle)
 		var s: float = spec[1]
-		Models.part(isle, Models.box_mesh(Vector3(s, 0.5, s), 0.22), Models.GRASS_B, Vector3(0, -0.25, 0))
+		Models.part(isle, Models.box_mesh(Vector3(s, 0.5, s), 0.22), Models.RIM, Vector3(0, -0.25, 0))
 		Models.part(isle, Models.box_mesh(Vector3(s * 0.8, 1.0, s * 0.8), 0.3), Models.DIRT, Vector3(0, -0.9, 0))
 		Models.part(isle, Models.box_mesh(Vector3(s * 0.45, 1.0, s * 0.45), 0.25), Models.ROCK, Vector3(0, -1.7, 0))
 		var t := Models.tree(r.randf() < 0.5, r)
@@ -562,17 +722,32 @@ func _update_hero(delta: float) -> void:
 			still.append(p)
 	hero_pass = still
 	var moved_dir := Vector2i.ZERO
-	if input_primary != Vector2i.ZERO:
+	var want: Vector2i = input_primary
+	var want2: Vector2i = input_secondary
+	if want == Vector2i.ZERO and walk_goal != NO_CELL:
+		var settle: Vector2i = _settle_cell()
+		if settle != NO_CELL:
+			# On the goal (or a warp pad): ease onto the middle of the tile.
+			var before: Vector2 = hero_pos
+			hero_pos = hero_pos.move_toward(Vector2(settle), speed * delta)
+			var step: Vector2 = hero_pos - before
+			if step.length_squared() > 1e-8:
+				moved_dir = Vector2i(roundi(signf(step.x)), 0) if absf(step.x) > absf(step.y) else Vector2i(0, roundi(signf(step.y)))
+			elif settle == walk_goal:
+				walk_goal = NO_CELL
+		else:
+			want = _walk_step()
+	if want != Vector2i.ZERO:
 		var dist: float = speed * delta
-		if _try_move(input_primary, dist):
-			moved_dir = input_primary
-		elif input_secondary != Vector2i.ZERO and _try_move(input_secondary, dist):
-			moved_dir = input_secondary
+		if _try_move(want, dist):
+			moved_dir = want
+		elif want2 != Vector2i.ZERO and _try_move(want2, dist):
+			moved_dir = want2
 	hero_moving = moved_dir != Vector2i.ZERO
 	if moved_dir != Vector2i.ZERO:
 		hero_yaw = atan2(float(moved_dir.x), float(moved_dir.y))
-	elif input_primary != Vector2i.ZERO:
-		hero_yaw = atan2(float(input_primary.x), float(input_primary.y))
+	elif want != Vector2i.ZERO:
+		hero_yaw = atan2(float(want.x), float(want.y))
 	var c: Vector2i = hero_cell()
 	if belts.has(c):
 		hero_pos = _move_axis(hero_pos, belts[c], BELT_SPEED * delta, _hero_blocked)
@@ -583,6 +758,8 @@ func _update_hero(delta: float) -> void:
 			_spawn_sparkles(_to3(Vector2(c), 0.3), Color("#C9B8FF"))
 			hero_pos = Vector2(warps[c])
 			hero_warped = true
+			if walk_goal == c or walk_goal == warps[c]:
+				walk_goal = NO_CELL
 			_spawn_sparkles(_to3(hero_pos, 0.3), Color("#C9B8FF"))
 			Sfx.play(&"teleport")
 			c = hero_cell()
@@ -621,6 +798,70 @@ func _pose_hero(delta: float) -> void:
 	_shield_node.visible = shield
 	if shield:
 		_shield_node.scale = Vector3.ONE * (1.0 + sin(_clock * 5.0) * 0.04)
+
+
+## The tile Pip should ease onto directly instead of walking a path: his
+## goal once he stands on it, or a warp pad he has stepped on. NO_CELL when
+## he still has walking to do.
+func _settle_cell() -> Vector2i:
+	var c: Vector2i = hero_cell()
+	if warps.has(c) and not hero_warped:
+		return c
+	if c == walk_goal:
+		return c
+	return NO_CELL
+
+
+## The direction of Pip's next step toward [member walk_goal]: around
+## blocks, pods and live flames, through warps. Zero means wait (the way is
+## shut for now, say by a flame).
+func _walk_step() -> Vector2i:
+	var first: Dictionary = _hero_search(true, false)["first"]
+	if not first.has(walk_goal) and can_kick:
+		first = _hero_search(true, true)["first"]
+	return first.get(walk_goal, Vector2i.ZERO)
+
+
+## Breadth-first search from Pip's tile over the tiles he can walk. Gives
+## {"first": {tile: first step}, "dist": {tile: steps}}. Stepping on a warp
+## lands on its partner. [param strict] also avoids live flames and pods
+## (unless [param through_pods], for kicking them out of the way).
+func _hero_search(strict: bool, through_pods: bool) -> Dictionary:
+	var start: Vector2i = hero_cell()
+	var first: Dictionary = {start: Vector2i.ZERO}
+	var dist: Dictionary = {start: 0}
+	var queue: Array[Vector2i] = [start]
+	var head: int = 0
+	while head < queue.size():
+		var c: Vector2i = queue[head]
+		head += 1
+		for d: Vector2i in DIRS:
+			var n: Vector2i = c + d
+			if first.has(n) or not _hero_can_walk(n, strict, through_pods):
+				continue
+			var step: Vector2i = d if c == start else first[c]
+			first[n] = step
+			dist[n] = int(dist[c]) + 1
+			if warps.has(n):
+				var w: Vector2i = warps[n]
+				if not first.has(w):
+					first[w] = step
+					dist[w] = int(dist[c]) + 2
+					queue.append(w)
+			else:
+				queue.append(n)
+	return {"first": first, "dist": dist}
+
+
+func _hero_can_walk(c: Vector2i, strict: bool, through_pods: bool) -> bool:
+	if tile(c) != FLOOR:
+		return false
+	if strict:
+		if flames.has(c):
+			return false
+		if not through_pods and pod_at.has(c) and not hero_pass.has(pod_at[c]):
+			return false
+	return true
 
 
 func _hero_blocked(c: Vector2i) -> bool:
@@ -684,6 +925,7 @@ func _respawn() -> void:
 	hero_alive = true
 	hero_invuln = 2.5
 	hero_pass.clear()
+	walk_goal = NO_CELL
 	state = &"play"
 	var body: Node3D = hero.get_node("Body")
 	body.rotation = Vector3.ZERO
@@ -732,10 +974,14 @@ func _lose(reason: String) -> void:
 
 # --- Fizz pods and blasts ------------------------------------------------------
 
-func drop_pod() -> void:
+## Drops a pod on Pip's tile, or on [param at] when he is still touching it
+## (a double tap's first tap may have nudged him off it).
+func drop_pod(at: Vector2i = NO_CELL) -> void:
 	if demo or state != &"play" or not hero_alive:
 		return
 	var c: Vector2i = hero_cell()
+	if at != NO_CELL and absf(hero_pos.x - at.x) < 0.95 and absf(hero_pos.y - at.y) < 0.95:
+		c = at
 	if pods_out >= max_pods or pod_at.has(c) or tile(c) != FLOOR or warps.has(c):
 		return
 	var p := Pod.new()
@@ -819,10 +1065,25 @@ func _explode(p: Pod) -> void:
 	hero_pass.erase(p)
 	p.node.queue_free()
 	_blast(p.cell, p.fire)
+	_spawn_ring(Vector3(p.cell.x, 0.06, p.cell.y), Models.FLAME_CORE, 1.0 + p.fire * 0.4)
+	_spawn_scorch(Vector3(p.cell.x, 0.012, p.cell.y))
 	Sfx.play(&"boom", 0.1)
-	_shake = maxf(_shake, 0.18)
+	_shake = maxf(_shake, 0.3)
+	_hitstop(0.05)
 	if not demo and hero_alive and hero_pos.distance_to(Vector2(p.cell)) < 4.0:
-		Save.buzz(35)
+		Save.buzz(40)
+
+
+## Freezes the action for a blink so a hit lands with weight.
+func _hitstop(seconds: float) -> void:
+	if demo or Engine.time_scale < 1.0:
+		return
+	Engine.time_scale = 0.05
+	get_tree().create_timer(seconds, true, false, true).timeout.connect(func() -> void: Engine.time_scale = 1.0)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 func _blast(c: Vector2i, reach: int) -> void:
@@ -850,17 +1111,28 @@ func _blast(c: Vector2i, reach: int) -> void:
 
 func _add_flame(c: Vector2i, dist: int, dir: Vector2i) -> void:
 	flames[c] = FLAME_TIME
+	# A cluster of tumbling fire cubes round a white-hot core cube. Arms lay
+	# their cubes along the blast line so the beam reads as solid.
 	var node := Node3D.new()
-	node.position = Vector3(c.x, 0.38, c.y)
+	node.position = Vector3(c.x, 0.34, c.y)
 	add_child(node)
-	var outer := Models.part(node, _flame_mesh, Models.FLAME, Vector3.ZERO, 1.1)
-	var inner := Models.part(node, _flame_mesh, Models.FLAME_CORE, Vector3(0, 0.05, 0), 1.6)
-	inner.scale = Vector3.ONE * 0.6
-	outer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	inner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if dir != Vector2i.ZERO:
+	var spots: Array[Vector3] = []
+	if dir == Vector2i.ZERO:
+		spots = [Vector3(0.2, 0.0, 0.2), Vector3(-0.2, 0.05, 0.2), Vector3(0.2, 0.05, -0.2), Vector3(-0.2, 0.0, -0.2)]
+	else:
 		node.rotation.y = atan2(-float(dir.y), float(dir.x))
-		node.set_meta(&"stretch", 1.45)
+		spots = [Vector3(-0.3, 0.0, rng.randf_range(-0.08, 0.08)), Vector3(0.0, 0.06, rng.randf_range(-0.08, 0.08)), Vector3(0.3, 0.0, rng.randf_range(-0.08, 0.08))]
+	for s: Vector3 in spots:
+		var cube := Models.part(node, _flame_mesh, Models.FLAME, s, 1.1)
+		cube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		cube.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+		cube.scale = Vector3.ONE * rng.randf_range(0.95, 1.2)
+		cube.set_meta(&"spin", Vector3(rng.randf_range(-5, 5), rng.randf_range(-5, 5), rng.randf_range(-5, 5)))
+	var core := Models.part(node, _flame_mesh, Models.FLAME_CORE, Vector3(0, 0.08, 0), 1.8)
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	core.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, 0)
+	core.scale = Vector3.ONE * (1.05 if dir == Vector2i.ZERO else 0.8)
+	core.set_meta(&"spin", Vector3(0, rng.randf_range(-7, 7), 0))
 	node.scale = Vector3.ONE * 0.01
 	_fx.append({"node": node, "t": -dist * 0.022, "life": FLAME_TIME, "kind": &"flame"})
 
@@ -880,13 +1152,35 @@ func _break_crate(c: Vector2i) -> void:
 		_crates_mm.set_instance_transform(i, hidden)
 		_bands_mm.set_instance_transform(i, hidden)
 		crate_slot.erase(c)
-	var chunk := Models.box_mesh(Vector3(0.28, 0.22, 0.28), 0.05)
+	# The crate cracks apart: a quick white flash, planks and band bits that
+	# fly out, bounce on the floor and lie there a moment, and a dust ring.
+	var at := Vector3(c.x, 0.4, c.y)
+	var flash := Models.part(self, Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1), Color.WHITE, at, 2.0)
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_fx.append({"node": flash, "t": 0.0, "life": 0.12, "kind": &"flash"})
+	var chunk := Models.box_mesh(Vector3(0.24, 0.2, 0.24), 0.035)
+	for k in 12:
+		var plank: bool = k < 8
+		var color: Color = Models.WOOD if plank else Models.WOOD_DARK
+		var n := Models.part(self, _plank_mesh if plank else chunk, color, at + Vector3(rng.randf_range(-0.2, 0.2), rng.randf_range(-0.2, 0.25), rng.randf_range(-0.2, 0.2)))
+		n.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+		if Models.GLASS:
+			n.material_override = Models.glass(color, 0.3 if plank else 0.7, 0.1)
+		var a: float = TAU * k / 12.0 + rng.randf_range(-0.3, 0.3)
+		var out: float = rng.randf_range(2.2, 4.2)
+		_fx.append({"node": n, "t": 0.0, "life": rng.randf_range(1.0, 1.3), "kind": &"debris", "floor": 0.06,
+			"vel": Vector3(cos(a) * out, rng.randf_range(3.5, 6.0), sin(a) * out),
+			"spin": Vector3(rng.randf_range(-14, 14), rng.randf_range(-14, 14), rng.randf_range(-14, 14))})
 	for k in 6:
-		var n := Models.part(self, chunk, Models.WOOD if k % 2 == 0 else Models.WOOD_DARK, Vector3(c.x, 0.4, c.y))
-		var a: float = rng.randf() * TAU
-		_fx.append({"node": n, "t": 0.0, "life": 0.75, "kind": &"debris",
-			"vel": Vector3(cos(a) * rng.randf_range(1.0, 2.6), rng.randf_range(2.5, 4.5), sin(a) * rng.randf_range(1.0, 2.6)),
-			"spin": Vector3(rng.randf_range(-9, 9), rng.randf_range(-9, 9), rng.randf_range(-9, 9))})
+		var a2: float = TAU * k / 6.0 + rng.randf() * 0.5
+		var d := Models.part(self, _smoke_mesh, Models.WOOD.lerp(Color("#F4ECE4"), 0.6), Vector3(c.x + cos(a2) * 0.25, 0.15, c.y + sin(a2) * 0.25))
+		d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		d.rotation.y = rng.randf() * TAU
+		_fx.append({"node": d, "t": 0.0, "life": 0.55, "kind": &"dust", "vel": Vector3(cos(a2) * 1.8, 0.5, sin(a2) * 1.8)})
+	Sfx.play(&"crunch", 0.12)
+	_shake = maxf(_shake, 0.22)
+	if not demo:
+		Save.buzz(18)
 	if drops.has(c):
 		var kind: StringName = drops[c]
 		drops.erase(c)
@@ -960,7 +1254,7 @@ func _collect(c: Vector2i) -> void:
 		&"fire":
 			fire = mini(fire + 1, 8)
 		&"speed":
-			speed = minf(speed + 0.5, 5.2)
+			speed = minf(speed + SPEED_STEP, MAX_SPEED)
 		&"kick":
 			can_kick = true
 		&"shield":
@@ -1082,7 +1376,7 @@ func _boss_summon(cr: Critter) -> void:
 		if _critter_can_enter(cr, c) and c != hero_cell() and not flames.has(c):
 			var m: Critter = _spawn_critter(&"blobbit", c)
 			m.node.scale = Vector3.ONE * 0.01
-			_spawn_sparkles(Vector3(c.x, 0.4, c.y), Color("#F7B3CB"))
+			_spawn_sparkles(Vector3(c.x, 0.4, c.y), Models.BLOBBIT.lightened(0.3))
 			Sfx.play(&"pop")
 			cr.node.get_node("Body").scale = Vector3(1.2, 0.8, 1.2)
 			return
@@ -1154,13 +1448,13 @@ func _pose_critter(cr: Critter, delta: float) -> void:
 # --- Effects and camera -------------------------------------------------------
 
 func _spawn_sparkles(at: Vector3, color: Color) -> void:
-	var mesh := Models.sphere(0.06, -1, 6)
 	for k in 10:
-		var n := Models.part(self, mesh, color, at, 1.5)
+		var n := Models.part(self, _spark_mesh, color, at, 1.5)
 		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var a: float = TAU * k / 10.0
 		_fx.append({"node": n, "t": 0.0, "life": 0.6, "kind": &"spark",
-			"vel": Vector3(cos(a) * 2.2, rng.randf_range(1.5, 3.0), sin(a) * 2.2)})
+			"vel": Vector3(cos(a) * 2.2, rng.randf_range(1.5, 3.0), sin(a) * 2.2),
+			"spin": Vector3(rng.randf_range(-10, 10), rng.randf_range(-10, 10), 0)})
 
 
 func _spawn_confetti(at: Vector3) -> void:
@@ -1193,31 +1487,61 @@ func _update_fx(delta: float) -> void:
 			&"flame":
 				if t < 0.0:
 					continue
+				# Punch in past full size, snap back, flicker, then shrink away.
 				var u: float = t / f["life"]
 				var s: float
-				if u < 0.15:
-					s = lerpf(0.2, 1.15, u / 0.15)
+				if u < 0.1:
+					s = lerpf(0.25, 1.35, u / 0.1)
+				elif u < 0.22:
+					s = lerpf(1.35, 1.0, (u - 0.1) / 0.12)
 				elif u < 0.7:
-					s = 1.0 + sin(t * 40.0) * 0.06
+					s = 1.0 + sin(t * 46.0) * 0.07
 				else:
-					s = lerpf(1.0, 0.05, (u - 0.7) / 0.3)
-				var stretch: float = n.get_meta(&"stretch", 1.0)
-				n.scale = Vector3(s * stretch, s * (1.0 + (1.0 - u) * 0.3), s * 0.95)
+					s = lerpf(1.0, 0.0, (u - 0.7) / 0.3)
+				n.scale = Vector3.ONE * maxf(s, 0.01)
+				n.position.y = 0.34 + maxf(u - 0.6, 0.0) * 0.5
+				for ch: Node in n.get_children():
+					var cube := ch as Node3D
+					cube.rotation += (cube.get_meta(&"spin", Vector3.ZERO) as Vector3) * delta
 			&"debris", &"spark":
 				var v: Vector3 = f["vel"]
-				v.y -= (9.0 if f["kind"] == &"debris" else 6.0) * delta
+				v.y -= (11.0 if f["kind"] == &"debris" else 6.0) * delta
 				if f.get("drag", false):
 					v *= 1.0 - delta * 1.5
-				f["vel"] = v
 				n.position += v * delta
+				if f.has("floor") and n.position.y < f["floor"] and v.y < 0.0:
+					# Hit the floor: bounce low, skid and slow the spin.
+					n.position.y = f["floor"]
+					v = Vector3(v.x * 0.45, -v.y * 0.3 if -v.y > 1.2 else 0.0, v.z * 0.45)
+					f["spin"] = (f["spin"] as Vector3) * 0.4
+				f["vel"] = v
 				if f.has("spin"):
 					n.rotation += f["spin"] * delta
 				var fade: float = clampf((f["life"] - t) / 0.25, 0.0, 1.0)
 				n.scale = Vector3.ONE * fade
 			&"smoke":
 				n.position.y += delta * 0.9
+				n.rotation.y += delta * 2.0
 				var k: float = t / f["life"]
-				n.scale = Vector3.ONE * (0.5 + k * 0.7) * (1.0 - k)
+				n.scale = Vector3.ONE * (0.6 + k * 0.6) * (1.0 - k)
+			&"dust":
+				var dv: Vector3 = f["vel"]
+				dv *= 1.0 - delta * 4.0
+				f["vel"] = dv
+				n.position += dv * delta
+				n.rotation.y += delta * 3.0
+				var kd: float = t / f["life"]
+				n.scale = Vector3.ONE * (0.7 + kd * 0.8) * (1.0 - kd * kd)
+			&"flash":
+				var uf: float = t / f["life"]
+				n.scale = Vector3.ONE * (1.0 + uf * 0.35) * (1.0 - uf)
+			&"ring":
+				var ur: float = t / f["life"]
+				var grow: float = f["size"] * (1.0 - pow(1.0 - ur, 3.0))
+				n.scale = Vector3(grow, 1.0 - ur * 0.8, grow)
+			&"scorch":
+				var us: float = clampf((t - f["life"] + 0.5) / 0.5, 0.0, 1.0)
+				n.scale = Vector3(1.0 - us, 1.0, 1.0 - us) * f["size"]
 			&"pop":
 				var u2: float = t / f["life"]
 				var big: float = 1.6 if f.get("big", false) else 1.0
@@ -1225,10 +1549,28 @@ func _update_fx(delta: float) -> void:
 	_fx = keep
 
 
+## A flat shockwave ring that races out from a blast.
+func _spawn_ring(at: Vector3, color: Color, size: float) -> void:
+	var n := Models.part(self, _ring_mesh, color, at, 1.6)
+	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.scale = Vector3.ONE * 0.1
+	_fx.append({"node": n, "t": 0.0, "life": 0.32, "kind": &"ring", "size": size * 2.0})
+
+
+## A dark burn mark left on the floor, which shrinks away after a while.
+func _spawn_scorch(at: Vector3) -> void:
+	var n := Models.part(self, _scorch_mesh, Models.GRASS_A.darkened(0.35), at)
+	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.rotation.y = rng.randf() * TAU
+	var size: float = rng.randf_range(0.9, 1.1)
+	n.scale = Vector3(size, 1.0, size)
+	_fx.append({"node": n, "t": 0.0, "life": 1.8, "kind": &"scorch", "size": size})
+
+
 func _spawn_smoke(at: Vector3) -> void:
 	if _fx.size() > 260:
 		return
-	var n := Models.part(self, Models.sphere(0.22, -1, 10), Color("#F4ECE4"), at + Vector3(randf_range(-0.15, 0.15), 0.1, randf_range(-0.15, 0.15)))
+	var n := Models.part(self, _smoke_mesh, Color("#F4ECE4"), at + Vector3(randf_range(-0.15, 0.15), 0.1, randf_range(-0.15, 0.15)))
 	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_fx.append({"node": n, "t": 0.0, "life": 0.7, "kind": &"smoke"})
 
@@ -1248,12 +1590,29 @@ func _animate_scenery(delta: float) -> void:
 		flag.rotation.y = sin(_clock * 4.0) * 0.25
 		if exit_open:
 			(_exit_node.get_node("Disc") as Node3D).scale = Vector3.ONE * (1.0 + sin(_clock * 6.0) * 0.06)
+	if _marker != null:
+		_marker_t += delta
+		var show: bool = state == &"play" and walk_goal != NO_CELL and walk_goal != hero_cell()
+		_marker.visible = show
+		if show:
+			_marker.position = Vector3(walk_goal.x, 0.0, walk_goal.y)
+			# Pops in on a new tap, then breathes.
+			var pop: float = 1.0 + 0.5 * exp(-_marker_t * 9.0)
+			_marker.scale = Vector3.ONE * pop * (1.0 + sin(_clock * 5.0) * 0.06)
+			_marker.rotation.y += delta * 1.2
 
 
 func _focus_target() -> Vector3:
-	if demo or hero == null:
-		return Vector3((W - 1) * 0.5, 0, (H - 1) * 0.5)
-	return Vector3(clampf(hero_pos.x, 5.0, W - 6.0), 0, clampf(hero_pos.y, 4.5, H - 4.5))
+	return Vector3((W - 1) * 0.5, 0, (H - 1) * 0.5)
+
+
+## How far back the level camera sits so the whole arena, including its
+## near (widest-looking) edge, fits the screen's width.
+func _cam_distance() -> float:
+	var fwd: Vector3 = -CAM_DIR.normalized()
+	var near_edge: float = ((H - 1) * 0.5 + 0.6) * fwd.z   # negative: closer
+	var half_tan: float = tan(deg_to_rad(CAM_FOV * 0.5))
+	return (W + 0.4) / (2.0 * half_tan) - near_edge
 
 
 func _update_camera(delta: float, snap: bool) -> void:
@@ -1267,9 +1626,15 @@ func _update_camera(delta: float, snap: bool) -> void:
 		camera.position = Vector3(_cam_focus.x + sin(_orbit) * r, 13.0, _cam_focus.z + cos(_orbit) * r)
 		camera.look_at(_cam_focus + Vector3(0, -1.5, 0), Vector3.UP)
 		return
-	var offset := Vector3(0, 11.0, 5.0)
-	camera.position = _cam_focus + offset
-	camera.look_at(_cam_focus + Vector3(0, 0, 0.9), Vector3.UP)
+	# A still camera that frames the whole arena, so a tapped spot never
+	# slides away under the finger.
+	var d: float = _cam_distance()
+	camera.position = _cam_focus + CAM_DIR.normalized() * d
+	camera.look_at(_cam_focus, Vector3.UP)
+	# Lift the camera so the arena sits in the middle of the space below
+	# the HUD (the shift is the same at any screen height).
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	camera.v_offset = HUD_TOP * 0.5 / vp.x * 2.0 * d * tan(deg_to_rad(CAM_FOV * 0.5))
 	if _shake > 0.0:
 		_shake = maxf(_shake - delta * 0.9, 0.0)
 		camera.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.35

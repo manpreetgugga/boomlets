@@ -15,11 +15,14 @@ extends RefCounted
 ## of each power-up hide in crates.
 
 const WORLD_NAMES: Array[String] = ["", "Meadow Isles"]
+## Each world's colour theme (see Models.PALETTES); the arena applies it
+## before building, so a new world only needs a palette name here.
+const WORLD_PALETTES: Array[String] = ["", "meadow"]
 
 const WORLD_1: Array[Dictionary] = [
 	{
 		"name": "Fizzy Start",
-		"tip": "Drag on the left to move.\nTap the pod button to drop a fizz pod!\nBlast every critter to open the exit.",
+		"tip": "Tap a tile to walk there.\nDouble-tap to drop a fizz pod!\nBlast every critter to open the exit.",
 		"crates": 0.55, "par": 60,
 		"drops": {"bomb": 2, "fire": 2, "speed": 1},
 		"map": [
@@ -164,3 +167,7 @@ static func count(world: int) -> int:
 
 static func get_level(world: int, level: int) -> Dictionary:
 	return WORLD_1[level - 1]
+
+
+static func palette(world: int) -> String:
+	return WORLD_PALETTES[world] if world < WORLD_PALETTES.size() else "meadow"

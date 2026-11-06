@@ -18,6 +18,30 @@ const SHADOW := Color(0.18, 0.12, 0.25, 0.22)
 
 static var _weights: Dictionary = {}
 
+## Fills drawn in this colour turn into frosted glass (see glass_ui.gdshader).
+const GLASS_KEY := Color(1.0, 0.0, 1.0)
+static var _glass_ui: ShaderMaterial
+
+
+## The frosted-glass material for a control that draws glass panels.
+static func glass_ui() -> ShaderMaterial:
+	if _glass_ui == null:
+		_glass_ui = ShaderMaterial.new()
+		_glass_ui.shader = preload("res://shaders/glass_ui.gdshader")
+	return _glass_ui
+
+
+## In glass mode, turns a cream panel style into a glass one: key-colour fill
+## (keeping its alpha), a thin bright rim and a lighter shadow.
+static func glassify(sb: StyleBoxFlat) -> StyleBoxFlat:
+	var c: Color = sb.bg_color
+	if Models.GLASS and c.r > 0.88 and c.g > 0.84 and c.b > 0.76:
+		sb.bg_color = Color(GLASS_KEY, c.a)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(1, 1, 1, 0.7 * c.a)
+		sb.shadow_color = Color(SHADOW, SHADOW.a * 0.6 * c.a)
+	return sb
+
 
 static func font(weight: int = 800) -> Font:
 	if not _weights.has(weight):
@@ -58,12 +82,14 @@ static func card_style(color: Color = CREAM, radius: int = 36) -> StyleBoxFlat:
 	s.content_margin_right = 28
 	s.content_margin_top = 22
 	s.content_margin_bottom = 22
-	return s
+	return glassify(s)
 
 
 static func card(color: Color = CREAM, radius: int = 36) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override(&"panel", card_style(color, radius))
+	if Models.GLASS:
+		p.material = glass_ui()
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	return p
 

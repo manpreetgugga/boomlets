@@ -16,7 +16,7 @@ const FILES: Dictionary = {
 	&"teleport": "res://audio/sfx/bounce.wav",
 	&"snap": "res://audio/sfx/snap.wav",
 }
-const GAIN: Dictionary = {&"boom": -3.0, &"place": -4.0, &"step": -14.0, &"pop": -5.0}
+const GAIN: Dictionary = {&"crunch": -1.0, &"boom": -3.0, &"place": -4.0, &"step": -14.0, &"pop": -5.0}
 
 var _streams: Dictionary = {}
 var _voices: Array[AudioStreamPlayer] = []
@@ -31,6 +31,7 @@ func _ready() -> void:
 		if s != null:
 			_streams[cue] = s
 	_streams[&"boom"] = _make_boom()
+	_streams[&"crunch"] = _make_crunch()
 	_streams[&"place"] = _make_tone([520.0, 380.0], 0.09, 0.5, true)
 	_streams[&"pop"] = _make_tone([300.0, 900.0], 0.16, 0.45, false)
 	_streams[&"hurt"] = _make_tone([620.0, 140.0], 0.55, 0.5, false)
@@ -45,7 +46,7 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -10.0
 	add_child(_music)
-	var m: AudioStreamWAV = load("res://audio/music/meadow.wav")
+	var m: AudioStreamWAV = load("res://audio/music/sorbet_skies.wav")
 	if m != null:
 		m.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		m.loop_begin = 0
@@ -95,19 +96,56 @@ func _wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 	return w
 
 
-## A soft cartoon explosion: a thump plus low-passed noise that fades.
+## A cartoon explosion: a sharp crack up front, a deep thump and
+## low-passed rumble that fades.
 func _make_boom() -> AudioStreamWAV:
-	var n: int = int(RATE * 0.75)
+	var n: int = int(RATE * 0.8)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var lp: float = 0.0
 	var phase: float = 0.0
 	for i in n:
 		var t: float = float(i) / RATE
-		var env: float = exp(-t * 6.0)
-		lp += (randf_range(-1.0, 1.0) - lp) * (0.08 + 0.25 * exp(-t * 10.0))
-		phase += TAU * (110.0 * exp(-t * 4.0) + 40.0) / RATE
-		out[i] = (lp * 1.6 + sin(phase) * 0.7 * exp(-t * 9.0)) * env
+		var env: float = exp(-t * 5.5)
+		var white: float = randf_range(-1.0, 1.0)
+		lp += (white - lp) * (0.07 + 0.3 * exp(-t * 12.0))
+		phase += TAU * (140.0 * exp(-t * 7.0) + 38.0) / RATE
+		var crack: float = white * exp(-t * 90.0) * 0.9
+		var thump: float = sin(phase) * 1.0 * exp(-t * 7.0)
+		out[i] = (lp * 1.5 + thump) * env + crack
+	return _wav(out)
+
+
+## Wood giving way: three quick knocks of resonant, filtered noise.
+func _make_crunch() -> AudioStreamWAV:
+	var n: int = int(RATE * 0.32)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for hit: Array in [[0.0, 520.0, 1.0], [0.028, 760.0, 0.7], [0.07, 380.0, 0.55]]:
+		var start: int = int(RATE * float(hit[0]))
+		# A two-pole resonator rung by a burst of noise.
+		var w: float = TAU * float(hit[1]) / RATE
+		var r: float = 0.985
+		var a1: float = 2.0 * r * cos(w)
+		var a2: float = -r * r
+		var y1: float = 0.0
+		var y2: float = 0.0
+		for i in range(start, n):
+			var t: float = float(i - start) / RATE
+			var x: float = randf_range(-1.0, 1.0) * exp(-t * 60.0)
+			var y: float = x + a1 * y1 + a2 * y2
+			y2 = y1
+			y1 = y
+			out[i] += y * 0.09 * float(hit[2]) * exp(-t * 18.0)
+	for i in n:
+		var t2: float = float(i) / RATE
+		out[i] += sin(TAU * 170.0 * t2) * exp(-t2 * 30.0) * 0.4
+	var peak: float = 0.0
+	for v: float in out:
+		peak = maxf(peak, absf(v))
+	if peak > 0.0:
+		for i in n:
+			out[i] *= 0.85 / peak
 	return _wav(out)
 
 

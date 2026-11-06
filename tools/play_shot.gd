@@ -18,6 +18,11 @@ func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--do="):
 			plan = arg.trim_prefix("--do=")
+		elif arg.begins_with("--palette="):
+			Models.use_palette(arg.trim_prefix("--palette="))
+			Models.palette_locked = true
+		elif arg == "--clay":
+			Models.GLASS = false
 		elif arg.begins_with("--size="):
 			var p: PackedStringArray = arg.trim_prefix("--size=").split("x")
 			size = Vector2i(p[0].to_int(), p[1].to_int())
@@ -71,6 +76,25 @@ func _act(what: String, arg: String) -> void:
 		"blast":
 			var b: PackedStringArray = arg.split(",")
 			arena._blast(Vector2i(b[0].to_int(), b[1].to_int()), 2)
+		"tap", "dtap":
+			# Taps the screen over tile x,z the way a finger would.
+			var t: PackedStringArray = arg.split(",")
+			var at: Vector2 = arena.camera.unproject_position(Vector3(t[0].to_float(), 0.3, t[1].to_float()))
+			_main.hud.tap(at)
+			if what == "dtap":
+				_main.hud.tap(at + Vector2(6, 4))
+		"maptest":
+			# Every inner tile's screen spot must map back to that tile.
+			var bad: int = 0
+			for z in range(1, arena.H - 1):
+				for x in range(1, arena.W - 1):
+					var sp: Vector2 = arena.camera.unproject_position(Vector3(x, 0.3, z))
+					if arena.cell_at_screen(sp) != Vector2i(x, z):
+						bad += 1
+			var tl: Vector2 = arena.camera.unproject_position(Vector3(-0.5, 0, -0.5))
+			var br: Vector2 = arena.camera.unproject_position(Vector3(arena.W - 0.5, 0, arena.H - 0.5))
+			var bl: Vector2 = arena.camera.unproject_position(Vector3(-0.5, 0, arena.H - 0.5))
+			print("maptest: %d tiles map wrong; arena top-left %s bottom-left %s bottom-right %s" % [bad, tl, bl, br])
 		"bosshit":
 			if arena.boss != null:
 				arena.flames[arena.hero_cell()] = 0.0

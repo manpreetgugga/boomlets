@@ -35,6 +35,8 @@ static func make(btn_text: String, btn_icon: StringName, size_px: Vector2, fill:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	if Models.GLASS:
+		material = Ui.glass_ui()
 	pivot_offset = size * 0.5
 	resized.connect(func() -> void: pivot_offset = size * 0.5)
 
@@ -75,7 +77,7 @@ func _draw() -> void:
 	sb.shadow_color = Ui.SHADOW
 	sb.shadow_size = 10
 	sb.shadow_offset = Vector2(0, 6)
-	draw_style_box(sb, rect)
+	draw_style_box(Ui.glassify(sb), rect)
 	var lip := StyleBoxFlat.new()
 	lip.bg_color = Color(1, 1, 1, 0.22)
 	lip.set_corner_radius_all(int(r))

@@ -1,8 +1,8 @@
 class_name Hud
 extends Control
 ## The in-level interface: timer, star meter, critter count, power-up
-## chips, the boss's health, the floating joystick (left half of the
-## screen), the pod button (right half), and the pause / win / lose cards.
+## chips, the boss's health and the pause / win / lose cards. No on-screen
+## controls: tap a tile to walk there, double-tap anywhere to drop a pod.
 ## Keyboard: arrows or WASD to move, Space to drop a pod, Esc or P to pause.
 
 signal restart_requested
@@ -10,18 +10,24 @@ signal next_requested
 signal map_requested
 signal home_requested
 
-const TOP_ZONE: float = 270.0
-const JOY_RADIUS: float = 105.0
+## Taps above this line belong to the HUD, not the arena.
+const TOP_ZONE: float = 240.0
+## A second tap this soon and this close to the first makes a double tap.
+const DOUBLE_TAP_MS: int = 300
+const DOUBLE_TAP_DIST: float = 120.0
 
 var arena: Arena
 var has_next: bool = false
 ## Off when a test script drives the arena directly.
 var auto_input: bool = true
 
-var _joy_index: int = -1
-var _joy_origin: Vector2
-var _joy_vec: Vector2
-var _pod_flash: float = 0.0
+var _last_tap_ms: int = -100000
+var _last_tap_pos: Vector2
+## Pip's goal and tile at the first tap, restored by a double tap.
+var _goal_before: Vector2i = Arena.NO_CELL
+var _cell_before: Vector2i = Arena.NO_CELL
+var _ripples: Array[Dictionary] = []
+var _keys_held: bool = false
 var _tip_t: float = 0.0
 var _card: Control
 var _card_stars: int = -1
@@ -35,6 +41,8 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if Models.GLASS:
+		material = Ui.glass_ui()
 	_pause_btn = Btn.make("", &"pause", Vector2(96, 96))
 	_pause_btn.position = Vector2(24, 30)
 	_pause_btn.pressed.connect(open_pause)
@@ -57,41 +65,45 @@ func _input(event: InputEvent) -> void:
 				if _card == null:
 					open_pause()
 		return
-	if not _controls_on():
-		_joy_index = -1
+	if not _controls_on() or not auto_input:
 		return
-	if event is InputEventScreenTouch:
-		var pos: Vector2 = event.position
-		if event.pressed:
-			if pos.y < TOP_ZONE:
-				return
-			if pos.x < size.x * 0.5:
-				if _joy_index == -1:
-					_joy_index = event.index
-					_joy_origin = pos
-					_joy_vec = Vector2.ZERO
-					_tip_t = maxf(_tip_t, 3.6)
-			else:
-				_press_pod()
-		elif event.index == _joy_index:
-			_joy_index = -1
-			_joy_vec = Vector2.ZERO
-	elif event is InputEventScreenDrag and event.index == _joy_index:
-		_joy_vec = event.position - _joy_origin
-		if _joy_vec.length() > JOY_RADIUS:
-			_joy_origin = event.position - _joy_vec.normalized() * JOY_RADIUS
-			_joy_vec = event.position - _joy_origin
+	if event is InputEventScreenTouch and event.pressed and event.position.y >= TOP_ZONE:
+		tap(event.position)
+
+
+## One tap on the arena: walk there, or, as the second tap of a double tap,
+## drop a pod. Pip starts walking on the first tap so it never feels slow;
+## the double tap then puts the pod where he stood and takes the walk back.
+func tap(pos: Vector2) -> void:
+	var now: int = Time.get_ticks_msec()
+	if now - _last_tap_ms < DOUBLE_TAP_MS and pos.distance_to(_last_tap_pos) < DOUBLE_TAP_DIST:
+		_last_tap_ms = -100000
+		arena.drop_pod(_cell_before)
+		arena.set_walk_goal(_goal_before if _goal_before != Arena.NO_CELL else _cell_before)
+		_ripples.append({"pos": pos, "t": 0.0, "pod": true})
+		return
+	_last_tap_ms = now
+	_last_tap_pos = pos
+	_goal_before = arena.walk_goal
+	_cell_before = arena.hero_cell()
+	arena.walk_to_screen(pos)
+	_ripples.append({"pos": pos, "t": 0.0, "pod": false})
+	_tip_t = maxf(_tip_t, 3.6)
 
 
 func _press_pod() -> void:
 	arena.drop_pod()
-	_pod_flash = 1.0
 
 
 func _process(delta: float) -> void:
 	_clock += delta
 	_tip_t += delta
-	_pod_flash = maxf(_pod_flash - delta * 4.0, 0.0)
+	var live: Array[Dictionary] = []
+	for r: Dictionary in _ripples:
+		r["t"] += delta
+		if r["t"] < 0.45:
+			live.append(r)
+	_ripples = live
 	if _card != null:
 		_card_t += delta
 		if _star_ctrl != null:
@@ -116,17 +128,11 @@ func _feed_input() -> void:
 			arena.set_input(h, v)
 		else:
 			arena.set_input(v, h)
+		_keys_held = true
 		return
-	var vec: Vector2 = _joy_vec if _joy_index != -1 else Vector2.ZERO
-	if vec.length() < 20.0:
+	if _keys_held:
+		_keys_held = false
 		arena.set_input(Vector2i.ZERO, Vector2i.ZERO)
-		return
-	var horiz := Vector2i(int(signf(vec.x)), 0)
-	var vert := Vector2i(0, int(signf(vec.y)))
-	if absf(vec.x) >= absf(vec.y):
-		arena.set_input(horiz, vert if absf(vec.y) > vec.length() * 0.25 else Vector2i.ZERO)
-	else:
-		arena.set_input(vert, horiz if absf(vec.x) > vec.length() * 0.25 else Vector2i.ZERO)
 
 
 # --- Drawing ----------------------------------------------------------------
@@ -140,7 +146,7 @@ func _pill(rect: Rect2, color: Color, radius: float = -1.0, shadow: bool = true)
 		sb.shadow_color = Ui.SHADOW
 		sb.shadow_size = 10
 		sb.shadow_offset = Vector2(0, 6)
-	draw_style_box(sb, rect)
+	draw_style_box(Ui.glassify(sb), rect)
 
 
 func _text(t: String, at: Vector2, font_size: int, color: Color, weight: int = 900, centered: bool = true) -> void:
@@ -183,8 +189,9 @@ func _draw() -> void:
 		_text(str(arena.critters_left()), cc.get_center() + Vector2(24, 2), 40, Ui.INK)
 
 	# Power-up chips.
-	var chips: Array = [[&"heart", str(arena.lives), Ui.RED], [&"pod", str(arena.max_pods), Ui.INK],
-		[&"fire", str(arena.fire), Color("#FF7A59")], [&"speed", str(int(round((arena.speed - 3.2) / 0.5)) + 1), Color("#4FB477")]]
+	var speed_level: int = int(round((arena.speed - Arena.BASE_SPEED) / Arena.SPEED_STEP)) + 1
+	var chips: Array = [[&"heart", str(arena.lives), Ui.RED], [&"pod", "%d/%d" % [arena.max_pods - arena.pods_out, arena.max_pods], Ui.INK],
+		[&"fire", str(arena.fire), Models.FLAME], [&"speed", str(speed_level), Color("#4FB477")]]
 	if arena.can_kick:
 		chips.append([&"kick", "", Ui.RED])
 	if arena.shield:
@@ -216,33 +223,19 @@ func _draw() -> void:
 		var a: float = clampf((4.5 - _tip_t) / 0.5, 0.0, 1.0) * clampf(_tip_t / 0.3, 0.0, 1.0)
 		var lines: PackedStringArray = String(arena.data["tip"]).split("\n")
 		var th: float = 30.0 + lines.size() * 40.0
-		var tr := Rect2(Vector2(w * 0.5 - 300, size.y - 440), Vector2(600, th))
+		var tr := Rect2(Vector2(w * 0.5 - 300, 250), Vector2(600, th))
 		_pill(tr, Color(Ui.CREAM, 0.95 * a), 30, false)
 		for i in lines.size():
 			_text(lines[i], tr.position + Vector2(300, 35 + i * 40), 28, Color(Ui.INK, a), 800)
 
-	if _card != null or arena.state != &"play":
-		return
-	# Joystick.
-	var home := Vector2(170, size.y - 230)
-	var origin: Vector2 = _joy_origin if _joy_index != -1 else home
-	var alpha: float = 0.55 if _joy_index != -1 else 0.3
-	draw_circle(origin, JOY_RADIUS, Color(1, 1, 1, alpha * 0.45))
-	draw_arc(origin, JOY_RADIUS, 0, TAU, 48, Color(1, 1, 1, alpha + 0.2), 5.0, true)
-	var knob: Vector2 = origin + (_joy_vec.limit_length(JOY_RADIUS) if _joy_index != -1 else Vector2.ZERO)
-	draw_circle(knob + Vector2(0, 5), 52, Color(Ui.SHADOW, 0.3))
-	draw_circle(knob, 52, Color(Ui.CREAM, 0.95 if _joy_index != -1 else 0.7))
-	# Pod button.
-	var pc := Vector2(size.x - 170, size.y - 230)
-	var ready: bool = arena.pods_out < arena.max_pods
-	var rad: float = 100.0 * (1.0 - _pod_flash * 0.08)
-	draw_circle(pc + Vector2(0, 8), rad, Color(Ui.SHADOW, 0.35))
-	draw_circle(pc, rad, Ui.YELLOW if ready else Ui.YELLOW.darkened(0.3))
-	draw_circle(pc + Vector2(0, -rad * 0.35), rad * 0.55, Color(1, 1, 1, 0.18))
-	Ui.draw_icon(self, &"pod", pc + Vector2(0, 6), 96, Ui.INK)
-	var left_pods: int = arena.max_pods - arena.pods_out
-	draw_circle(pc + Vector2(rad * 0.7, -rad * 0.7), 28, Ui.INK)
-	_text(str(left_pods), pc + Vector2(rad * 0.7, -rad * 0.7), 30, Ui.CREAM)
+	# A soft ripple where the finger landed: white for a walk, a bigger
+	# apricot one for a pod.
+	for r: Dictionary in _ripples:
+		var u: float = r["t"] / 0.45
+		var big: bool = r["pod"]
+		var rad: float = lerpf(18.0, 70.0 if big else 48.0, 1.0 - pow(1.0 - u, 3.0))
+		var col: Color = Ui.YELLOW if big else Color.WHITE
+		draw_arc(r["pos"], rad, 0.0, TAU, 40, Color(col, (1.0 - u) * 0.9), 6.0 if big else 4.0, true)
 
 
 # --- Cards ------------------------------------------------------------------
@@ -341,7 +334,7 @@ func _on_won(stars: int, seconds: float) -> void:
 	if has_next:
 		buttons.append(["Next", &"next", func() -> void: next_requested.emit(), Ui.YELLOW])
 	else:
-		lines.append("Meadow Isles cleared!")
+		lines.append("%s cleared!" % Levels.WORLD_NAMES[arena.world_id])
 	buttons.append(["Replay", &"restart", func() -> void: restart_requested.emit()])
 	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
 	_open_card("Cleared!", buttons, stars, lines)

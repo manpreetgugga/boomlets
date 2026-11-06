@@ -7,37 +7,142 @@ extends RefCounted
 const BLOB_SHADER: Shader = preload("res://shaders/blob_shadow.gdshader")
 
 # Colours (sRGB).
-const GRASS_A := Color("#9AD27A")
-const GRASS_B := Color("#86C46A")
-const STONE := Color("#E2D8CB")
-const DARK_STONE := Color("#B3A496")
-const DIRT := Color("#B98563")
-const ROCK := Color("#C9B9A8")
-const WOOD := Color("#DDA066")
-const WOOD_DARK := Color("#B97A48")
-const INK := Color("#2E2A4A")
-const WHITE := Color("#FFFDF8")
-const HERO := Color("#5CC8B4")
-const HERO_BELLY := Color("#FFF1D6")
-const LEAF := Color("#6CBF5A")
-const POD := Color("#3B3A5C")
-const FLAME := Color("#FF8A3D")
-const FLAME_CORE := Color("#FFD45C")
-const BLOBBIT := Color("#F28DB2")
-const BUZZER := Color("#F3C623")
-const WISP := Color("#B9A7F0")
-const BOSS := Color("#8A6A52")
-const BOSS_SPIKE := Color("#F4DEAA")
-const GOLD := Color("#F3C623")
-const BARREL := Color("#E4572E")
-const BELT := Color("#6B6580")
-const ACCENT := Color("#F2A541")
+static var GRASS_A: Color = Color("#9AD27A")      # floor checker, light
+static var GRASS_B: Color = Color("#86C46A")      # floor checker, dark
+static var RIM: Color = Color("#86C46A")          # the island's top around the arena
+static var EDGE: Color = Color("#5FA85A")         # the arena's hedge border
+static var STONE: Color = Color("#E2D8CB")
+static var DARK_STONE: Color = Color("#B3A496")
+static var DIRT: Color = Color("#B98563")
+static var ROCK: Color = Color("#C9B9A8")
+static var WOOD: Color = Color("#DDA066")
+static var WOOD_DARK: Color = Color("#B97A48")
+static var INK: Color = Color("#2E2A4A")
+static var WHITE: Color = Color("#FFFDF8")
+static var HERO: Color = Color("#5CC8B4")
+static var HERO_BELLY: Color = Color("#FFF1D6")
+static var LEAF: Color = Color("#6CBF5A")
+static var POD: Color = Color("#3B3A5C")
+static var FLAME: Color = Color("#FF8A3D")
+static var FLAME_CORE: Color = Color("#FFD45C")
+static var BLOBBIT: Color = Color("#F28DB2")
+static var BUZZER: Color = Color("#F3C623")
+static var WISP: Color = Color("#B9A7F0")
+static var BOSS: Color = Color("#8A6A52")
+static var BOSS_SPIKE: Color = Color("#F4DEAA")
+static var GOLD: Color = Color("#F3C623")
+static var BARREL: Color = Color("#E4572E")
+static var BELT: Color = Color("#6B6580")
+static var ACCENT: Color = Color("#F2A541")
+static var MARKER: Color = Color("#FFF6E8")
+static var BLOSSOM_A: Color = Color("#6CBF5A")    # tree leaves
+static var BLOSSOM_B: Color = Color("#4FA463")
+static var TRUNK: Color = Color("#8B5E3C")
+static var LEAFY_A: Color = Color("#7BC66A")      # bushes
+static var LEAFY_B: Color = Color("#5DAE5E")
+
+# The sky and light that go with the palette.
+static var SKY_TOP: Color = Color("#8EC5EC")
+static var SKY_HORIZON: Color = Color("#FCEFD9")
+static var SKY_GROUND: Color = Color("#D6E2DC")
+static var CLOUD: Color = Color("#FFFFFF")
+static var CLOUDS: float = 0.6
+static var AMBIENT: Color = Color("#AFC8EA")
+static var AMBIENT_ENERGY: float = 0.5
+static var SUN: Color = Color("#FFF0DC")
+static var SUN_ENERGY: float = 1.55
+
+## Colour themes for the world. "meadow" is the original look; the others
+## change only what they list. Pick one with [method use_palette].
+const PALETTES: Dictionary = {
+	"meadow": {},
+	"candy_coast": {
+		"GRASS_A": "#F6DEB0", "GRASS_B": "#EDCF98", "RIM": "#F2D49C", "EDGE": "#3FA7D6",
+		"STONE": "#FFF6EA", "DARK_STONE": "#D9CBB8", "DIRT": "#E8B07A", "ROCK": "#D9A77C",
+		"WOOD": "#FF7F6B", "WOOD_DARK": "#E0584F", "BARREL": "#3F7FE0", "FLAME_CORE": "#FFE36E",
+		"BLOSSOM_A": "#4DBF7A", "BLOSSOM_B": "#2FA36B", "TRUNK": "#A8743F", "LEAFY_A": "#6FD39B", "LEAFY_B": "#45B883",
+		"SKY_TOP": "#39C5D9", "SKY_HORIZON": "#FFF3D6", "SKY_GROUND": "#BFEFF0", "AMBIENT": "#B9E6EE", "SUN": "#FFF3DF",
+	},
+	"berry_choco": {
+		"GRASS_A": "#FBD9E1", "GRASS_B": "#F5C6D2", "RIM": "#F2B8C8", "EDGE": "#6B3F2A",
+		"STONE": "#E3D0BC", "DARK_STONE": "#C2A98F", "DIRT": "#8E5B3E", "ROCK": "#6E4630",
+		"WOOD": "#9B6340", "WOOD_DARK": "#FFF0D0", "BLOBBIT": "#A6E36B",
+		"BLOSSOM_A": "#8EDFC1", "BLOSSOM_B": "#6CCFAE", "TRUNK": "#6E4630", "LEAFY_A": "#9FE6CC", "LEAFY_B": "#7FD8B8",
+		"SKY_TOP": "#F7A8C4", "SKY_HORIZON": "#FFF4DA", "SKY_GROUND": "#FBE3E9", "AMBIENT": "#F3D3E0", "SUN": "#FFF0DC",
+	},
+	"neon_night": {
+		"GRASS_A": "#363C7C", "GRASS_B": "#2C316B", "RIM": "#262A5C", "EDGE": "#7A4BE0",
+		"STONE": "#5464C8", "DARK_STONE": "#3A4590", "DIRT": "#2C2556", "ROCK": "#221D45",
+		"WOOD": "#FF5FA2", "WOOD_DARK": "#FFD166", "HERO": "#5CE8C8", "POD": "#ECE9FF",
+		"FLAME": "#39E6FF", "FLAME_CORE": "#F2FFFF", "BLOBBIT": "#B6FF5C", "WISP": "#9FE3FF",
+		"BARREL": "#FF8A3D", "BELT": "#1E2250", "ACCENT": "#39E6FF",
+		"BLOSSOM_A": "#3FD9B0", "BLOSSOM_B": "#2BB7C9", "TRUNK": "#4A3B7A", "LEAFY_A": "#FF6FB5", "LEAFY_B": "#B07BFF",
+		"SKY_TOP": "#0E1033", "SKY_HORIZON": "#6A2F8F", "SKY_GROUND": "#1A1440", "CLOUD": "#4A3C7E", "CLOUDS": 0.35,
+		"AMBIENT": "#6A74C8", "AMBIENT_ENERGY": 0.7, "SUN": "#C9D2FF", "SUN_ENERGY": 1.1,
+	},
+	"plum_cocoa": {
+		"GRASS_A": "#5B3F7A", "GRASS_B": "#4E3570", "RIM": "#3F2B5E", "EDGE": "#6B3F2A",
+		"STONE": "#C9B9CC", "DARK_STONE": "#9E8AA3", "DIRT": "#5A3726", "ROCK": "#3E2A40",
+		"WOOD": "#FF8FB8", "WOOD_DARK": "#FFE3A3", "POD": "#F4EBFF", "BLOBBIT": "#B6FF5C",
+		"BELT": "#2E2147", "ACCENT": "#FFC36B",
+		"BLOSSOM_A": "#FF9EC4", "BLOSSOM_B": "#E07BB0", "TRUNK": "#6B3F2A", "LEAFY_A": "#B48CF0", "LEAFY_B": "#9670DB",
+		"SKY_TOP": "#2B1D4F", "SKY_HORIZON": "#C9709A", "SKY_GROUND": "#2A1F45", "CLOUD": "#7A5A9E", "CLOUDS": 0.4,
+		"AMBIENT": "#9C86C8", "AMBIENT_ENERGY": 0.65, "SUN": "#FFE2C4", "SUN_ENERGY": 1.3,
+	},
+	"frost_gift": {
+		"GRASS_A": "#EEF6FB", "GRASS_B": "#DCEBF5", "RIM": "#F7FBFE", "EDGE": "#2F7A63",
+		"STONE": "#A9D6EE", "DARK_STONE": "#7FB8DA", "DIRT": "#BFD9EA", "ROCK": "#8FAFC8",
+		"WOOD": "#E8505B", "WOOD_DARK": "#F7C948",
+		"BLOSSOM_A": "#2F7A63", "BLOSSOM_B": "#3E9A7A", "TRUNK": "#7A5A44", "LEAFY_A": "#DDEFFA", "LEAFY_B": "#BFE0F2",
+		"SKY_TOP": "#9DB8F0", "SKY_HORIZON": "#FFE3EC", "SKY_GROUND": "#E4EEF7", "AMBIENT": "#C5D8F2", "SUN": "#FFF0E6",
+	},
+}
+static var _defaults: Dictionary = {}
+## Set by dev tools that force a palette, so the world's own one is skipped.
+static var palette_locked: bool = false
+
+
+## Switches every colour to [param name]'s palette (see [constant PALETTES]).
+## Call before building an arena.
+static func use_palette(name: String) -> void:
+	var script: GDScript = load("res://render/Models.gd")
+	if _defaults.is_empty():
+		for pal_name: String in PALETTES:
+			for key: String in PALETTES[pal_name]:
+				if not _defaults.has(key):
+					_defaults[key] = script.get(key)
+	for key: String in _defaults:
+		script.set(key, _defaults[key])
+	var pal: Dictionary = PALETTES.get(name, {})
+	for key: String in pal:
+		var v: Variant = pal[key]
+		script.set(key, Color(v) if v is String else v)
+
 
 static var _boxes: Dictionary = {}
+static var _glass: Dictionary = {}
+
+## When on, crates (and the shards they break into) and the HUD are frosted
+## glass instead of clay and cream cards.
+static var GLASS: bool = true
+const GLASS_SHADER: Shader = preload("res://shaders/glass.gdshader")
 
 
 static func mat(color: Color, glow: float = 0.0) -> ShaderMaterial:
 	return ClayShapes.material(color, glow)
+
+
+## Shared frosted-glass material in [param color].
+static func glass(color: Color, tint: float = 0.3, glow: float = 0.0) -> ShaderMaterial:
+	var key: String = "%s/%.2f/%.2f" % [color.to_html(), tint, glow]
+	if not _glass.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = GLASS_SHADER
+		m.set_shader_parameter(&"albedo", color)
+		m.set_shader_parameter(&"tint", tint)
+		m.set_shader_parameter(&"glow", glow)
+		_glass[key] = m
+	return _glass[key]
 
 
 static func box_mesh(size: Vector3, radius: float) -> ArrayMesh:
@@ -160,7 +265,7 @@ static func blobbit() -> Node3D:
 	root.add_child(body)
 	var dome := part(body, sphere(0.36, 0.6, 22), BLOBBIT, Vector3(0, 0.26, 0))
 	dome.scale = Vector3(1.0, 1.0, 1.0)
-	part(body, sphere(0.1, -1, 10), Color("#F7B3CB"), Vector3(-0.15, 0.46, 0.1))
+	part(body, sphere(0.1, -1, 10), BLOBBIT.lightened(0.35), Vector3(-0.15, 0.46, 0.1))
 	_eyes(body, 0.32, 0.27, 0.11, 0.075)
 	var mouth := part(body, box_mesh(Vector3(0.1, 0.035, 0.03), 0.012), INK, Vector3(0, 0.2, 0.33))
 	mouth.rotation.x = -0.2
@@ -234,7 +339,7 @@ static func boss() -> Node3D:
 		var a2: float = TAU * k / 5.0
 		part(crown, cylinder(0.0, 0.06, 0.16, 6), GOLD, Vector3(cos(a2) * 0.16, 0.14, sin(a2) * 0.16), 0.2)
 	for side: int in [-1, 1]:
-		part(body, sphere(0.16, 0.16, 12), Color("#6B5040"), Vector3(side * 0.42, 0.08, 0.3)).scale = Vector3(1, 1, 1.4)
+		part(body, sphere(0.16, 0.16, 12), BOSS.darkened(0.25), Vector3(side * 0.42, 0.08, 0.3)).scale = Vector3(1, 1, 1.4)
 	return root
 
 
@@ -286,6 +391,24 @@ static func teleporter(color: Color) -> Node3D:
 	for k in 3:
 		var a: float = TAU * k / 3.0
 		part(orbit, sphere(0.05, -1, 8), color.lightened(0.6), Vector3(cos(a) * 0.3, 0.18, sin(a) * 0.3), 1.2)
+	return root
+
+
+## Where a tap sent Pip: a glowing ring with four little studs.
+static func walk_marker() -> Node3D:
+	var root := Node3D.new()
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.3
+	ring.outer_radius = 0.38
+	ring.rings = 28
+	ring.ring_segments = 8
+	var r := part(root, ring, MARKER, Vector3(0, 0.04, 0), 0.9)
+	r.scale = Vector3(1, 0.35, 1)
+	r.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for k in 4:
+		var a: float = TAU * k / 4.0
+		var s := part(root, sphere(0.05, -1, 8), MARKER, Vector3(cos(a) * 0.34, 0.07, sin(a) * 0.34), 1.2)
+		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return root
 
 
@@ -345,8 +468,8 @@ static func tree(tall: bool, rng: RandomNumberGenerator) -> Node3D:
 	var root := Node3D.new()
 	blob_shadow(root, 1.0, 0.3)
 	var h: float = 0.9 if tall else 0.55
-	part(root, cylinder(0.06, 0.08, h * 0.5, 8), Color("#8B5E3C"), Vector3(0, h * 0.25, 0))
-	var green := Color("#6CBF5A").lerp(Color("#4FA463"), rng.randf())
+	part(root, cylinder(0.06, 0.08, h * 0.5, 8), TRUNK, Vector3(0, h * 0.25, 0))
+	var green := BLOSSOM_A.lerp(BLOSSOM_B, rng.randf())
 	if tall:
 		for k in 3:
 			var cone := part(root, cylinder(0.0, 0.38 - k * 0.09, 0.42, 14), green, Vector3(0, h * 0.42 + k * 0.24, 0))
@@ -359,7 +482,7 @@ static func tree(tall: bool, rng: RandomNumberGenerator) -> Node3D:
 
 static func bush(rng: RandomNumberGenerator) -> Node3D:
 	var root := Node3D.new()
-	var green := Color("#7BC66A").lerp(Color("#5DAE5E"), rng.randf())
+	var green := LEAFY_A.lerp(LEAFY_B, rng.randf())
 	for k in 3:
 		var a: float = TAU * k / 3.0 + rng.randf()
 		part(root, sphere(0.17 + rng.randf() * 0.06, -1, 12), green, Vector3(cos(a) * 0.13, 0.15, sin(a) * 0.13))
