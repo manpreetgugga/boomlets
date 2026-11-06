@@ -117,6 +117,9 @@ var input_secondary: Vector2i = Vector2i.ZERO
 var camera: Camera3D
 var _shake: float = 0.0
 var _cam_focus: Vector3
+## Dev only: a close-up camera for store screenshots (x, z, distance, height);
+## off while w is 0.
+var shot_cam: Vector4 = Vector4.ZERO
 var _orbit: float = 0.0
 var _clock: float = 0.0
 var _walk_phase: float = 0.0
@@ -1708,6 +1711,13 @@ func _update_camera(delta: float, snap: bool) -> void:
 		var r: float = 17.0
 		camera.position = Vector3(_cam_focus.x + sin(_orbit) * r, 13.0, _cam_focus.z + cos(_orbit) * r)
 		camera.look_at(_cam_focus + Vector3(0, -1.5, 0), Vector3.UP)
+		return
+	if shot_cam.w > 0.0:
+		# Store-screenshot close-up (tools/play_shot.gd "cam"): x, z, distance, height.
+		var focus := Vector3(shot_cam.x, 0.0, shot_cam.y)
+		camera.position = focus + Vector3(0.0, shot_cam.w, 5.0).normalized() * shot_cam.z
+		camera.look_at(focus, Vector3.UP)
+		camera.v_offset = 0.0
 		return
 	# A still camera that frames the whole arena, so a tapped spot never
 	# slides away under the finger.

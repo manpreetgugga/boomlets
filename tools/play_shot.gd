@@ -114,6 +114,48 @@ func _act(what: String, arg: String) -> void:
 			_main.hud._watch_for_life()
 		"privacy":
 			_main._show_privacy(_main._ui.get_child(0))
+		"cam":
+			# Close-up for store shots: cam:x,z,distance,height (height 11 = normal tilt).
+			var c: PackedStringArray = arg.split(",")
+			arena.shot_cam = Vector4(c[0].to_float(), c[1].to_float(), c[2].to_float(), c[3].to_float() if c.size() > 3 else 11.0)
+		"stage":
+			# stage:gap,distance,height - Pip on the free tile nearest to `gap`
+			# rows in front of the boss (or first critter), camera framing both.
+			var s: PackedStringArray = arg.split(",")
+			var foe = arena.boss if arena.boss != null else (arena.critters[0] if not arena.critters.is_empty() else null)
+			if foe == null:
+				return
+			var want: Vector2i = foe.cell + Vector2i(0, s[0].to_int())
+			var best: Vector2i = arena.hero_cell()
+			var best_d: float = INF
+			for z in range(1, arena.H - 1):
+				for x in range(1, arena.W - 1):
+					var c := Vector2i(x, z)
+					if arena.tile(c) == 0 and c.y > foe.cell.y and Vector2(c - want).length() < best_d:
+						best_d = Vector2(c - want).length()
+						best = c
+			arena.hero_pos = Vector2(best)
+			var mid: Vector2 = (Vector2(foe.cell) + Vector2(best)) * 0.5
+			var fx: String = s[3] if s.size() > 3 else ""
+			if fx == "pod":
+				# A fizzy pod where Pip stood, Pip one step to the side.
+				arena.drop_pod()
+				for side: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1)]:
+					if arena.tile(best + side) == 0:
+						arena.hero_pos = Vector2(best + side)
+						break
+			elif fx == "solo":
+				# Boss portrait: Pip back at the start, camera on the foe alone.
+				arena.hero_pos = Vector2(arena.start_cell)
+				arena.shot_cam = Vector4(foe.cell.x, foe.cell.y - 0.7, s[1].to_float(), s[2].to_float())
+			elif fx == "blast":
+				arena._blast(foe.cell + Vector2i(-2, 0) if foe.cell.x > 3 else foe.cell + Vector2i(2, 0), 2)
+			arena.shot_cam = Vector4(mid.x, mid.y, s[1].to_float(), s[2].to_float())
+			print("stage foe=%s pip=%s" % [foe.cell, best])
+		"nohud":
+			# Hides the HUD and any world overlay (timers and the like).
+			for layer in root.find_children("*", "CanvasLayer", true, false):
+				layer.visible = false
 		"bosshit":
 			if arena.boss != null:
 				arena.flames[arena.hero_cell()] = 0.0
@@ -123,6 +165,6 @@ func _act(what: String, arg: String) -> void:
 			var img: Image = _vp.get_texture().get_image()
 			var path: String = ProjectSettings.globalize_path("res://shots/%s.png" % arg)
 			img.save_png(path)
-			print("shot %s hero=%s cell=%s state=%s critters=%d lives=%d pods=%d boss=%s" % [arg, arena.hero_pos, arena.hero_cell(), arena.state, arena.critters.size(), arena.lives, arena.pods.size(), str(arena.boss.hp) if arena.boss != null else "-"])
+			print("shot %s hero=%s cell=%s state=%s critters=%d lives=%d pods=%d boss=%s" % [arg, arena.hero_pos, arena.hero_cell(), arena.state, arena.critters.size(), arena.lives, arena.pods.size(), "%d@%s" % [arena.boss.hp, arena.boss.cell] if arena.boss != null else "-"])
 			for p in arena.pods:
 				print("  pod at ", p.cell, " slide ", p.slide)
