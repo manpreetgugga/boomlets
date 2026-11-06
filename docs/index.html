@@ -3,29 +3,500 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Boomlets</title>
+<title>Boomlets: pop pods, outsmart the critters</title>
+<meta name="description" content="Boomlets is a cozy 3D arena game for Android. Help Pip clear 25 floating worlds: drop fizzy pods, break crates and outsmart 25 big, silly bosses.">
+<meta name="theme-color" content="#FFF4E2">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Boomlets">
+<meta property="og:description" content="Pop pods. Blast crates. Outsmart the critters! A cozy 3D arena game for Android.">
+<meta property="og:image" content="https://manpreetgugga.github.io/boomlets/img/og.jpg">
+<meta property="og:url" content="https://manpreetgugga.github.io/boomlets/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
-  :root { --ink: #2E2A4A; --soft: #6B6585; --cream: #FFF4E2; --accent: #F2A541; }
-  @media (prefers-color-scheme: dark) { :root { --ink: #F3EEFF; --soft: #C5BEDD; --cream: #1E1A30; --accent: #FFD166; } }
-  body { margin: 0; background: var(--cream); color: var(--ink); font: 18px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 2.4rem; margin: 0; }
-  p.tag { color: var(--soft); margin-top: 4px; }
-  img { width: 30%; max-width: 200px; border-radius: 12px; margin: 4px; }
-  a { color: var(--accent); }
+:root {
+  --ink: #2E2A4A;
+  --soft: #6B6585;
+  --bg: #FFF4E2;
+  --card: #FFFFFF;
+  --line: rgba(46, 42, 74, 0.10);
+  --yellow: #FFD166;
+  --teal: #7FD1C7;
+  --pink: #FF9DB5;
+  --lilac: #B9A7F2;
+  --sky1: #A9CBE0;
+  --sky2: #CFE6D2;
+  --shadow: 0 18px 40px -18px rgba(46, 42, 74, 0.35);
+  --title-stroke: #2E2A4A;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #F3EEFF;
+    --soft: #C5BEDD;
+    --bg: #1B1730;
+    --card: #2A2540;
+    --line: rgba(243, 238, 255, 0.10);
+    --sky1: #2B3558;
+    --sky2: #23314A;
+    --shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+    --title-stroke: #2E2A4A;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #F3EEFF; --soft: #C5BEDD; --bg: #1B1730; --card: #2A2540;
+  --line: rgba(243, 238, 255, 0.10); --sky1: #2B3558; --sky2: #23314A;
+  --shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-weight: 700;
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+img { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 720px) { .wrap { padding: 0 28px; } }
+
+/* ---------- Nav ---------- */
+nav {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 900; font-size: 1.25rem; letter-spacing: 0.02em; }
+.brand img { width: 38px; height: 38px; border-radius: 11px; box-shadow: 0 4px 10px -4px rgba(46,42,74,.5); }
+nav ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; }
+nav ul a { text-decoration: none; color: var(--soft); font-weight: 800; }
+nav ul a:hover { color: var(--ink); }
+@media (max-width: 640px) { nav ul { display: none; } }
+
+/* ---------- Hero ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 500px at 85% 110%, var(--sky2), transparent 60%),
+    linear-gradient(180deg, var(--sky1) 0%, var(--bg) 100%);
+  padding: 56px 0 72px;
+}
+.hero .wrap { display: grid; gap: 40px; align-items: center; grid-template-columns: 1fr; position: relative; z-index: 1; }
+@media (min-width: 900px) { .hero .wrap { grid-template-columns: 1.05fr 1fr; } .hero { padding: 80px 0 100px; } }
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--card); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px 6px 8px;
+  font-size: .9rem; font-weight: 800;
+  box-shadow: var(--shadow);
+}
+.eyebrow .dot { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); display: grid; place-items: center; font-size: .75rem; }
+.eyebrow .dot::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.5); opacity: .5; } }
+
+h1.title {
+  margin: 18px 0 8px;
+  font-size: clamp(3.2rem, 11vw, 6.4rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--yellow);
+  text-shadow:
+    -4px -4px 0 var(--title-stroke), 4px -4px 0 var(--title-stroke),
+    -4px 4px 0 var(--title-stroke), 4px 4px 0 var(--title-stroke),
+    0 -5px 0 var(--title-stroke), 0 5px 0 var(--title-stroke),
+    -5px 0 0 var(--title-stroke), 5px 0 0 var(--title-stroke),
+    0 12px 0 rgba(46,42,74,.25);
+}
+.tagline {
+  display: inline-block;
+  margin: 18px 0 0;
+  background: var(--yellow); color: #2E2A4A;
+  border-radius: 18px; padding: 10px 18px;
+  font-size: clamp(1.1rem, 2.6vw, 1.45rem); font-weight: 900;
+  box-shadow: 0 6px 0 rgba(46,42,74,.18);
+}
+.lede { font-size: 1.12rem; color: var(--soft); max-width: 34ch; margin: 22px 0 28px; font-weight: 700; }
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.play {
+  display: inline-flex; align-items: center; gap: 12px;
+  background: #2E2A4A; color: #fff;
+  border-radius: 16px; padding: 10px 20px 10px 16px;
+  text-decoration: none;
+  box-shadow: 0 6px 0 #17142a;
+  transition: transform .15s;
+}
+.play:hover { transform: translateY(-2px); }
+.play svg { width: 28px; height: 28px; flex: none; }
+.play small { display: block; font-size: .72rem; font-weight: 800; opacity: .75; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
+.play b { display: block; font-size: 1.15rem; font-weight: 900; line-height: 1.2; }
+.ghost {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border-radius: 16px;
+  text-decoration: none; font-weight: 900;
+  border: 2px solid var(--line); background: var(--card);
+}
+
+/* phones */
+.phones { position: relative; height: 520px; max-width: 520px; width: 100%; margin: 0 auto; }
+@media (max-width: 520px) { .phones { height: 430px; } }
+.phone {
+  position: absolute; width: 56%; aspect-ratio: 9 / 16;
+  border-radius: 30px; overflow: hidden;
+  border: 7px solid #2E2A4A; background: #2E2A4A;
+  box-shadow: 0 30px 60px -20px rgba(46,42,74,.55);
+}
+.phone img { width: 100%; height: 100%; object-fit: cover; }
+.phone.a { left: 2%; top: 30px; transform: rotate(-7deg); animation: bob 6s ease-in-out infinite; }
+.phone.b { right: 2%; top: 0; transform: rotate(6deg); z-index: 2; animation: bob 6s ease-in-out -3s infinite; }
+@keyframes bob { 50% { translate: 0 -12px; } }
+
+/* floating pods */
+.pod {
+  position: absolute; z-index: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5a5480, #2E2A4A 65%);
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,.2);
+  animation: drift 9s ease-in-out infinite;
+}
+.pod::before { content: ""; position: absolute; left: 0; right: 0; top: 46%; height: 14%; background: #F3E6D3; opacity: .9; }
+.pod::after {
+  content: ""; position: absolute; left: 50%; top: -22%; width: 10%; height: 26%;
+  background: #A27B5C; transform: translateX(-50%) rotate(14deg); border-radius: 4px;
+  box-shadow: 4px -6px 0 2px #FFE08A;
+}
+.pod.p1 { width: 54px; height: 54px; left: 4%; top: 16%; }
+.pod.p2 { width: 34px; height: 34px; right: 46%; top: 8%; animation-delay: -3s; }
+.pod.p3 { width: 42px; height: 42px; right: 4%; bottom: 10%; animation-delay: -5s; }
+@keyframes drift { 50% { transform: translateY(-16px) rotate(8deg); } }
+@media (max-width: 899px) { .pod.p1, .pod.p2 { display: none; } }
+
+/* ---------- Stats ---------- */
+.stats { margin-top: -38px; position: relative; z-index: 2; }
+.stats ul {
+  list-style: none; margin: 0; padding: 18px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  background: var(--card); border-radius: 26px; box-shadow: var(--shadow);
+}
+@media (min-width: 720px) { .stats ul { grid-template-columns: repeat(4, 1fr); padding: 22px; } }
+.stats li { text-align: center; padding: 10px 6px; border-radius: 18px; }
+.stats li:nth-child(1) { background: color-mix(in srgb, var(--teal) 28%, transparent); }
+.stats li:nth-child(2) { background: color-mix(in srgb, var(--yellow) 35%, transparent); }
+.stats li:nth-child(3) { background: color-mix(in srgb, var(--pink) 30%, transparent); }
+.stats li:nth-child(4) { background: color-mix(in srgb, var(--lilac) 32%, transparent); }
+.stats b { display: block; font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 900; line-height: 1.1; }
+.stats span { color: var(--soft); font-weight: 800; }
+
+/* ---------- Sections ---------- */
+section { padding: 84px 0 0; }
+.kicker { color: var(--soft); text-transform: uppercase; letter-spacing: .14em; font-size: .82rem; font-weight: 900; margin: 0 0 8px; }
+h2 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; line-height: 1.1; margin: 0 0 14px; letter-spacing: -0.01em; }
+.sub { color: var(--soft); font-size: 1.1rem; max-width: 56ch; margin: 0; }
+.center { text-align: center; }
+.center .sub { margin: 0 auto; }
+
+/* feature rows */
+.rows { display: grid; gap: 56px; margin-top: 48px; }
+.row { display: grid; gap: 28px; align-items: center; grid-template-columns: 1fr; }
+@media (min-width: 820px) {
+  .row { grid-template-columns: 1fr 1fr; gap: 56px; }
+  .row.flip .shot { order: 2; }
+}
+.shot { position: relative; }
+.shot img { width: 100%; aspect-ratio: 18 / 17; object-fit: cover; object-position: center 72%; border-radius: 28px; box-shadow: var(--shadow); }
+.shot .sticker {
+  position: absolute; bottom: -14px; left: 20px;
+  background: var(--yellow); color: #2E2A4A; font-weight: 900;
+  padding: 8px 16px; border-radius: 999px;
+  box-shadow: 0 5px 0 rgba(46,42,74,.2);
+  transform: rotate(-3deg);
+}
+.row.flip .shot .sticker { left: auto; right: 20px; transform: rotate(3deg); background: var(--pink); }
+.row h3 { font-size: clamp(1.6rem, 3.6vw, 2.2rem); font-weight: 900; line-height: 1.15; margin: 0 0 12px; }
+.row p { color: var(--soft); font-size: 1.08rem; margin: 0 0 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.chips li { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: .92rem; font-weight: 800; }
+.how { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.how li { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 16px; padding: 12px 14px; border: 1px solid var(--line); }
+.how .n { flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-weight: 900; color: #2E2A4A; background: var(--teal); }
+.how li:nth-child(2) .n { background: var(--yellow); }
+.how li:nth-child(3) .n { background: var(--pink); }
+
+/* screenshots strip */
+.strip {
+  display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding: 36px 16px 30px; margin-top: 8px;
+  scrollbar-width: thin;
+}
+@media (min-width: 1176px) { .strip { padding-left: calc((100vw - 1120px) / 2 + 28px); padding-right: calc((100vw - 1120px) / 2 + 28px); } }
+.strip figure { flex: none; margin: 0; width: 230px; scroll-snap-align: center; }
+.strip img { width: 100%; aspect-ratio: 9 / 16; border-radius: 24px; border: 6px solid #2E2A4A; box-shadow: var(--shadow); transition: transform .2s; }
+.strip figure:nth-child(odd) img { transform: rotate(-1.5deg); }
+.strip figure:nth-child(even) img { transform: rotate(1.5deg) translateY(10px); }
+.strip figure:hover img { transform: scale(1.03); }
+.hint { text-align: center; color: var(--soft); font-size: .9rem; margin: 0; }
+
+/* bosses */
+.bosses { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 40px; padding: 0; list-style: none; }
+@media (min-width: 640px) { .bosses { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 960px) { .bosses { grid-template-columns: repeat(5, 1fr); gap: 18px; } }
+.boss { background: var(--card); border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); transition: transform .2s; }
+.boss:hover { transform: translateY(-6px) rotate(-1deg); }
+.boss img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.boss div { padding: 10px 12px 14px; }
+.boss b { display: block; font-weight: 900; font-size: .98rem; line-height: 1.2; letter-spacing: .02em; }
+.boss span { color: var(--soft); font-size: .86rem; font-weight: 800; }
+.more { text-align: center; margin: 22px 0 0; color: var(--soft); }
+
+/* power-ups */
+.powers { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 36px; list-style: none; padding: 0; }
+@media (min-width: 480px) { .powers { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 820px) { .powers { grid-template-columns: repeat(3, 1fr); } }
+.powers li { background: var(--card); border-radius: 20px; padding: 16px; border: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
+.powers i {
+  flex: none; width: 44px; height: 44px; border-radius: 14px;
+  display: grid; place-items: center; font-style: normal; font-weight: 900; font-size: 1.2rem; color: #2E2A4A;
+}
+.powers b { display: block; font-weight: 900; }
+.powers span { color: var(--soft); font-size: .92rem; font-weight: 700; }
+
+/* closing CTA */
+.final {
+  margin: 96px auto 0;
+  background:
+    radial-gradient(500px 240px at 90% 0%, color-mix(in srgb, var(--pink) 55%, transparent), transparent 70%),
+    radial-gradient(500px 260px at 0% 100%, color-mix(in srgb, var(--teal) 55%, transparent), transparent 70%),
+    #2E2A4A;
+  color: #fff; border-radius: 34px; padding: 48px 24px; text-align: center; position: relative; overflow: hidden;
+}
+.final img.pip { width: 120px; height: 120px; border-radius: 30px; margin: 0 auto 18px; box-shadow: 0 16px 30px -10px rgba(0,0,0,.5); animation: bob 5s ease-in-out infinite; }
+.final h2 { color: var(--yellow); }
+.final p { color: #D8D2EE; max-width: 46ch; margin: 0 auto 26px; font-size: 1.08rem; }
+.final .play { background: var(--yellow); color: #2E2A4A; box-shadow: 0 6px 0 #c99a3c; }
+.final .ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.25); }
+.final .cta { justify-content: center; }
+
+footer { padding: 48px 0 40px; color: var(--soft); font-size: .95rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; align-items: center; }
+footer nav { position: static; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+footer .links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+footer a { text-decoration: none; font-weight: 800; }
+footer a:hover { color: var(--ink); text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+}
 </style>
 </head>
 <body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="img/icon.webp" alt="" width="38" height="38">Boomlets</a>
+    <ul>
+      <li><a href="#play">How to play</a></li>
+      <li><a href="#screens">Screens</a></li>
+      <li><a href="#bosses">Bosses</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <span class="pod p1" aria-hidden="true"></span>
+  <span class="pod p2" aria-hidden="true"></span>
+  <span class="pod p3" aria-hidden="true"></span>
+  <div class="wrap">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>Now in closed testing on Android</span>
+      <h1 class="title">BOOMLETS</h1>
+      <p class="tagline">Pop pods. Blast crates. Outsmart the critters!</p>
+      <p class="lede">Help Pip, a little sprout with a big fizz, clear 25 floating worlds. Drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.</p>
+      <div class="cta">
+        <a class="play" href="#join" aria-label="Coming soon to Google Play">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#34A853" d="M3.6 1.8 13.4 12 3.6 22.2c-.4-.2-.6-.6-.6-1.1V2.9c0-.5.2-.9.6-1.1z"/><path fill="#FBBC04" d="m16.7 8.7-3.3 3.3 3.3 3.3 3.8-2.1c.9-.5.9-1.8 0-2.3z"/><path fill="#4285F4" d="M3.6 22.2c.3.2.8.2 1.2 0l11.9-6.9-3.3-3.3z"/><path fill="#EA4335" d="M4.8 1.8c-.4-.2-.9-.2-1.2 0L13.4 12l3.3-3.3z"/></svg>
+          <span><small>Coming soon to</small><b>Google Play</b></span>
+        </a>
+        <a class="ghost" href="#screens">See it in action ↓</a>
+      </div>
+    </div>
+    <div class="phones" aria-label="Game screenshots">
+      <div class="phone a"><img src="img/screen_1.webp" alt="Pip drops a pod next to a spiky critter: Pop pods, outsmart the critters!" width="540" height="960"></div>
+      <div class="phone b"><img src="img/screen_3.webp" alt="Six of the bosses: Meet 25 big, silly bosses" width="540" height="960"></div>
+    </div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="wrap">
+    <ul>
+      <li><b>25</b><span>floating worlds</span></li>
+      <li><b>150</b><span>levels</span></li>
+      <li><b>25</b><span>silly bosses</span></li>
+      <li><b>450</b><span>stars to collect</span></li>
+    </ul>
+  </div>
+</div>
+
 <main>
-<h1>Boomlets</h1>
-<p class="tag">Pop pods. Blast crates. Outsmart the critters!</p>
-<p>A cozy 3D arena game for Android. Help Pip clear twenty-five floating worlds: drop fizzy pods, break crates, grab power-ups and pop every critter to open the exit.</p>
-<p>
-  <img src="https://raw.githubusercontent.com/manpreetgugga/boomlets/main/shots/menu.png" alt="Main menu">
-  <img src="https://raw.githubusercontent.com/manpreetgugga/boomlets/main/shots/world_7.png" alt="Prism Caverns">
-  <img src="https://raw.githubusercontent.com/manpreetgugga/boomlets/main/shots/world_22.png" alt="Comet Orbit">
-</p>
-<p><a href="privacy.html">Privacy policy</a> · <a href="https://github.com/manpreetgugga/boomlets/issues">Contact</a></p>
+  <section id="play">
+    <div class="wrap">
+      <div class="center">
+        <p class="kicker">How it plays</p>
+        <h2>Small levels. Big fizz.</h2>
+        <p class="sub">Every level is a bite-sized puzzle you can finish on a coffee break, and every world adds a brand-new twist.</p>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="shot">
+            <img src="img/scene_1.webp" alt="Pip next to a pod, with a spiky critter and crates nearby" width="720" height="1000" loading="lazy">
+            <span class="sticker">Easy to pick up</span>
+          </div>
+          <div>
+            <h3>Two taps and you're playing</h3>
+            <p>No fiddly joysticks. Pip goes where you point and pods go where Pip stands.</p>
+            <ul class="how">
+              <li><span class="n">1</span>Tap a tile to walk there</li>
+              <li><span class="n">2</span>Double-tap to drop a fizzy pod</li>
+              <li><span class="n">3</span>Pop every critter, find the exit, earn three stars</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="row flip">
+          <div class="shot">
+            <img src="img/scene_9.webp" alt="Pip dodges a blast from a grumpy furnace robot" width="720" height="1000" loading="lazy">
+            <span class="sticker">25 worlds, 25 twists</span>
+          </div>
+          <div>
+            <h3>Every world plays differently</h3>
+            <p>Just when you've got the hang of it, the floor starts moving. Each world brings its own trick to learn and master.</p>
+            <ul class="chips">
+              <li>Conveyor belts</li><li>Warp pads</li><li>Rising tides</li><li>Slippery ice</li>
+              <li>Mirrors &amp; prisms</li><li>Gusty wind</li><li>Lava</li><li>Brambles</li>
+              <li>Magnets</li><li>Origami</li><li>Dominoes</li><li>Bouncy slimes</li>
+              <li>Arcade wrap-around</li><li>Asteroids</li><li>Changing seasons</li><li>A shadow twin</li>
+              <li>Starlight bridges</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="shot">
+            <img src="img/scene_17.webp" alt="Pip meets a painter robot on a sunny striped boardwalk" width="720" height="1000" loading="lazy">
+            <span class="sticker">Cozy &amp; crisp</span>
+          </div>
+          <div>
+            <h3>Clay-and-glass worlds to get lost in</h3>
+            <p>Soft, toy-like 3D worlds that look great on any phone, each with its own music. No account needed, free with optional ads.</p>
+            <ul class="chips">
+              <li>Original music per world</li><li>Coffee-break levels</li><li>No sign-up</li><li>Free to play</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap center">
+      <p class="kicker">Screenshots</p>
+      <h2>Take a peek</h2>
+    </div>
+    <div class="strip" tabindex="0" aria-label="Screenshots, scroll sideways">
+      <figure><img src="img/screen_1.webp" alt="Pop pods. Outsmart the critters!" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_2.webp" alt="Blast your way through boss battles" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_3.webp" alt="Meet 25 big, silly bosses" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_4.webp" alt="25 worlds, each with its own twist" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_5.webp" alt="Tap to walk. Double-tap to drop a pod." width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_6.webp" alt="150 levels and 450 stars to collect" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_7.webp" alt="Cozy 3D worlds for a quick coffee break" width="540" height="960" loading="lazy"></figure>
+      <figure><img src="img/screen_8.webp" alt="Free to play. No account needed." width="540" height="960" loading="lazy"></figure>
+    </div>
+    <p class="hint">Swipe or scroll sideways for more →</p>
+  </section>
+
+  <section id="bosses">
+    <div class="wrap">
+      <div class="center">
+        <p class="kicker">Boss gallery</p>
+        <h2>Meet the bosses</h2>
+        <p class="sub">Every world ends with a big, silly boss guarding the way forward. Here are a few of the 25 you'll face.</p>
+      </div>
+      <ul class="bosses">
+        <li class="boss"><img src="img/boss_2.webp" alt="Captain Clawdia, a crab in a captain's hat" width="360" height="360" loading="lazy"><div><b>CAPTAIN CLAWDIA</b><span>Candy Coast</span></div></li>
+        <li class="boss"><img src="img/boss_3.webp" alt="Baron Burrow, a drilling mole" width="360" height="360" loading="lazy"><div><b>BARON BURROW</b><span>Cocoa Canyon</span></div></li>
+        <li class="boss"><img src="img/boss_4.webp" alt="Big Brrr, a frosty yeti" width="360" height="360" loading="lazy"><div><b>BIG BRRR</b><span>Frost Peaks</span></div></li>
+        <li class="boss"><img src="img/boss_6.webp" alt="Sir Cuckoo's clock house" width="360" height="360" loading="lazy"><div><b>SIR CUCKOO</b><span>Clockwork Keep</span></div></li>
+        <li class="boss"><img src="img/boss_7.webp" alt="Geode Golem, a crystal golem" width="360" height="360" loading="lazy"><div><b>GEODE GOLEM</b><span>Prism Caverns</span></div></li>
+        <li class="boss"><img src="img/boss_8.webp" alt="Big Bluster, a pink kite" width="360" height="360" loading="lazy"><div><b>BIG BLUSTER</b><span>Gale Heights</span></div></li>
+        <li class="boss"><img src="img/boss_10.webp" alt="Old Thornroot, a thorny tree stump" width="360" height="360" loading="lazy"><div><b>OLD THORNROOT</b><span>Bramblewood</span></div></li>
+        <li class="boss"><img src="img/boss_13.webp" alt="Maestro, a blue bird conductor" width="360" height="360" loading="lazy"><div><b>MAESTRO</b><span>Rhythm Cloudway</span></div></li>
+        <li class="boss"><img src="img/boss_15.webp" alt="Origami Dragon, a folded paper dragon" width="360" height="360" loading="lazy"><div><b>ORIGAMI DRAGON</b><span>Origami Valley</span></div></li>
+        <li class="boss"><img src="img/boss_23.webp" alt="Season Stag, a deer with leafy antlers" width="360" height="360" loading="lazy"><div><b>SEASON STAG</b><span>Seasons Grove</span></div></li>
+      </ul>
+      <p class="more">…plus King Slime, Star Owl and thirteen more waiting in the later worlds.</p>
+    </div>
+  </section>
+
+  <section id="powers">
+    <div class="wrap">
+      <div class="center">
+        <p class="kicker">Power-ups</p>
+        <h2>Crack a crate, find a treat</h2>
+        <p class="sub">Crates hide power-ups that turn a tight spot into a big blast.</p>
+      </div>
+      <ul class="powers">
+        <li><i style="background:var(--teal)">+1</i><div><b>Extra pods</b><span>Drop more pods at once</span></div></li>
+        <li><i style="background:var(--yellow)">↔</i><div><b>Longer blasts</b><span>Reach further down the row</span></div></li>
+        <li><i style="background:var(--pink)">»</i><div><b>Speed boots</b><span>Zip around the board</span></div></li>
+        <li><i style="background:var(--lilac)">➜</i><div><b>Kick</b><span>Boot pods across the arena</span></div></li>
+        <li><i style="background:var(--teal)">◆</i><div><b>Shield</b><span>Stay safe when things get hot</span></div></li>
+        <li><i style="background:var(--pink)">♥</i><div><b>Hearts</b><span>More chances on tricky levels</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="wrap" id="join">
+    <div class="final">
+      <img class="pip" src="img/icon.webp" alt="Pip and a pod" width="256" height="256" loading="lazy">
+      <h2>Coming soon to Google Play</h2>
+      <p>Boomlets is in closed testing right now. Want to be one of the first to play and help shape the game? Drop us a line and we'll add you to the tester list.</p>
+      <div class="cta">
+        <a class="play" href="mailto:manpreetsingh4501@gmail.com?subject=Boomlets%20tester">
+          <span><small>Join the test</small><b>Become a tester</b></span>
+        </a>
+        <a class="ghost" href="https://github.com/manpreetgugga/boomlets/issues">Send feedback</a>
+      </div>
+    </div>
+  </div>
 </main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 MS' Studios · Made with love and fizz</span>
+    <div class="links">
+      <a href="privacy.html">Privacy policy</a>
+      <a href="mailto:manpreetsingh4501@gmail.com">Contact</a>
+      <a href="https://github.com/manpreetgugga/boomlets/issues">Report a bug</a>
+    </div>
+  </div>
+</footer>
+
 </body>
 </html>
