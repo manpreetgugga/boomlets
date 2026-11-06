@@ -13,6 +13,13 @@ var _main: Node
 
 
 func _initialize() -> void:
+	# Test runs stay silent.
+	AudioServer.set_bus_mute(0, true)
+	# ...and out of sight: the window is only a host for the off-screen
+	# viewport, so park it far off the desktop (also pass --position
+	# -20000,-20000 --resolution 64x64 so it never shows at all).
+	DisplayServer.window_set_size(Vector2i(64, 64))
+	DisplayServer.window_set_position(Vector2i(-20000, -20000))
 	var size := Vector2i(720, 1280)
 	var plan: String = ""
 	for arg: String in OS.get_cmdline_user_args():

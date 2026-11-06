@@ -1442,9 +1442,10 @@ func _boss_summon(cr: Critter) -> void:
 	for d: Vector2i in DIRS:
 		var c: Vector2i = cr.cell + d
 		if _critter_can_enter(cr, c) and c != hero_cell() and not flames.has(c):
-			var m: Critter = _spawn_critter(kit.boss_minion_kind(), c)
+			var kind: StringName = kit.boss_minion_kind()
+			var m: Critter = _spawn_critter(kind, c)
 			m.node.scale = Vector3.ONE * 0.01
-			_spawn_sparkles(Vector3(c.x, 0.4, c.y), Models.BLOBBIT.lightened(0.3))
+			_spawn_sparkles(Vector3(c.x, 0.4, c.y), Models.BLOBBIT.lightened(0.3) if kind == &"blobbit" else Color("#FFF3B0"))
 			Sfx.play(&"pop")
 			cr.node.get_node("Body").scale = Vector3(1.2, 0.8, 1.2)
 			return
