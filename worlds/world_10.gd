@@ -686,10 +686,9 @@ func _burn_fx(c: Vector2i) -> void:
 	for k in 8:
 		var a: float = TAU * k / 8.0 + randf_range(-0.3, 0.3)
 		var color: Color = M.BRAMBLE_LIGHT if k % 3 else (M.ROSE if k == 0 else M.CHAR)
-		var n := Models.part(arena, M.leaf_mesh(), color, at + Vector3(cos(a) * 0.2, randf_range(-0.1, 0.2), sin(a) * 0.2))
-		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var n: MeshInstance3D = arena.fx_part(M.leaf_mesh(), color, at + Vector3(cos(a) * 0.2, randf_range(-0.1, 0.2), sin(a) * 0.2))
 		n.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
-		arena._fx.append({"node": n, "t": 0.0, "life": randf_range(0.8, 1.1), "kind": &"debris", "floor": 0.05,
+		arena._fx.append({"node": n, "t": 0.0, "life": randf_range(0.8, 1.1), "kind": &"debris", "floor": 0.05, "pool": true,
 			"vel": Vector3(cos(a) * randf_range(1.5, 2.8), randf_range(3.0, 4.8), sin(a) * randf_range(1.5, 2.8)),
 			"spin": Vector3(randf_range(-12, 12), randf_range(-12, 12), randf_range(-12, 12))})
 	Sfx.play(&"crunch", 0.15)
@@ -700,9 +699,8 @@ func _spark(at: Vector3, color: Color, count: int) -> void:
 		return
 	for k in count:
 		var a: float = TAU * k / count
-		var n := Models.part(arena, arena._spark_mesh, color, at, 1.2)
-		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		arena._fx.append({"node": n, "t": 0.0, "life": 0.5, "kind": &"spark",
+		var n: MeshInstance3D = arena.fx_part(arena._spark_mesh, color, at, 1.2)
+		arena._fx.append({"node": n, "t": 0.0, "life": 0.5, "kind": &"spark", "pool": true,
 			"vel": Vector3(cos(a) * 1.6, randf_range(1.2, 2.4), sin(a) * 1.6),
 			"spin": Vector3(randf_range(-10, 10), randf_range(-10, 10), 0)})
 

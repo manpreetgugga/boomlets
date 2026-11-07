@@ -40,6 +40,11 @@ var _pause_btn: Btn
 var _clock: float = 0.0
 ## The extra life from a rewarded ad is offered once per try.
 var _revived: bool = false
+## What the HUD showed last time it was drawn; it is only redrawn when this
+## changes (or while a ripple, tip or hurry blink is animating).
+var _shown: Array = []
+## Panel styles by colour, radius and shadow, made once instead of per draw.
+var _styles: Dictionary = {}
 
 
 func _ready() -> void:
@@ -116,7 +121,24 @@ func _process(delta: float) -> void:
 		if _confetti != null:
 			_confetti.queue_redraw()
 	_feed_input()
-	queue_redraw()
+	if _needs_redraw():
+		queue_redraw()
+
+
+func _needs_redraw() -> bool:
+	if arena == null:
+		return false
+	if not _ripples.is_empty() or (_tip_t < 4.6 and arena.data.has("tip")):
+		return true
+	var left: float = arena.time_left()
+	var blink: bool = left < 30.0 and arena.state == &"play" and fmod(_clock, 0.5) < 0.3
+	var now: Array = [int(ceil(left)), blink, arena.stars_for_time(arena.elapsed), arena.exit_open,
+		arena.critters_left(), arena.lives, arena.max_pods - arena.pods_out, arena.max_pods, arena.fire,
+		arena.speed, arena.can_kick, arena.shield, arena.boss.hp if arena.boss != null else -1, size]
+	if now == _shown:
+		return false
+	_shown = now
+	return true
 
 
 func _feed_input() -> void:
@@ -145,15 +167,23 @@ func _feed_input() -> void:
 # --- Drawing ----------------------------------------------------------------
 
 func _pill(rect: Rect2, color: Color, radius: float = -1.0, shadow: bool = true) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = color
-	sb.set_corner_radius_all(int(rect.size.y * 0.5 if radius < 0.0 else radius))
-	sb.anti_aliasing = true
-	if shadow:
-		sb.shadow_color = Ui.SHADOW
-		sb.shadow_size = 10
-		sb.shadow_offset = Vector2(0, 6)
-	draw_style_box(Ui.glassify(sb), rect)
+	var corner: int = int(rect.size.y * 0.5 if radius < 0.0 else radius)
+	var key: Array = [color, corner, shadow]
+	var sb: StyleBoxFlat = _styles.get(key)
+	if sb == null:
+		sb = StyleBoxFlat.new()
+		sb.bg_color = color
+		sb.set_corner_radius_all(corner)
+		sb.anti_aliasing = true
+		if shadow:
+			sb.shadow_color = Ui.SHADOW
+			sb.shadow_size = 10
+			sb.shadow_offset = Vector2(0, 6)
+		Ui.glassify(sb)
+		if _styles.size() > 64:
+			_styles.clear()
+		_styles[key] = sb
+	draw_style_box(sb, rect)
 
 
 func _text(t: String, at: Vector2, font_size: int, color: Color, weight: int = 900, centered: bool = true) -> void:

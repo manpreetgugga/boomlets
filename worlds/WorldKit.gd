@@ -11,7 +11,8 @@ extends RefCounted
 ## pods, _spawn_sparkles(), _multimesh(), add_child() and so on). These
 ## arena helpers are fair game too: _spawn_ring(at, color, size),
 ## _spawn_scorch(at), _spawn_confetti(at), _fx (effect list, see
-## _update_fx), _shake (camera shake amount), _hitstop(seconds),
+## _update_fx; make one-piece effects with fx_part() and add "pool": true
+## so they are reused), _shake (camera shake amount), _hitstop(seconds),
 ## _danger_cells(), _kill_critter(cr), _hurt_hero(), _spawn_critter(kind, c),
 ## _spawn_pickup(c, kind) and _blast(c, reach). Sounds: Sfx.play(cue) for
 ## the built-in cues (boom, crunch, place, pop, hurt, kick, gate, boss_hit,

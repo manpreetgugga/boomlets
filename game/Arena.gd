@@ -29,6 +29,9 @@ const CAM_DIR := Vector3(0.0, 11.0, 5.0)
 ## Screen space (in 720-wide UI pixels) the HUD covers at the top; the arena
 ## is centred in the space below it.
 const HUD_TOP: float = 170.0
+## Seconds a cached tap-walk step stays good when nothing else changed (catches
+## walls that open and shut on their own).
+const WALK_REFRESH: float = 0.15
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1, &"boss": 1.0}
 ## Every critter (and boss) walks at this share of its listed speed: a
@@ -111,6 +114,11 @@ var speed: float = BASE_SPEED
 var can_kick: bool = false
 ## The tile Pip is walking to after a tap, or NO_CELL.
 var walk_goal: Vector2i = NO_CELL
+## The last answer of _walk_step and what it was worked out from: the path
+## search runs again only when one of these changes, or after WALK_REFRESH.
+var _walk_key: Array = []
+var _walk_dir: Vector2i = Vector2i.ZERO
+var _walk_age: float = 0.0
 var shield: bool = false
 var pods_out: int = 0
 var deaths: int = 0
@@ -142,12 +150,20 @@ var _warp_nodes: Array[Node3D] = []
 var _exit_node: Node3D
 var _shield_node: MeshInstance3D
 var _fx: Array[Dictionary] = []
+## Effect pieces (sparks, chips, smoke...) and flame clusters that have
+## finished, hidden and kept for the next blast instead of being freed and
+## built again. Entries made with fx_part() carry "pool": true.
+var _fx_pool: Array[MeshInstance3D] = []
+var _flame_pool: Dictionary = {true: [], false: []}   # arm? -> Array of Node3D
+const FX_POOL_MAX: int = 320
 var _flame_mesh: Mesh
 var _spark_mesh: Mesh
 var _smoke_mesh: Mesh
 var _plank_mesh: Mesh
 var _ring_mesh: Mesh
 var _scorch_mesh: Mesh
+var _flash_mesh: Mesh
+var _chunk_mesh: Mesh
 var _marker: Node3D
 var _marker_t: float = 0.0
 
@@ -172,6 +188,8 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	_spark_mesh = Models.box_mesh(Vector3(0.1, 0.1, 0.1), 0.015)
 	_smoke_mesh = Models.box_mesh(Vector3(0.3, 0.3, 0.3), 0.05)
 	_plank_mesh = Models.box_mesh(Vector3(0.52, 0.11, 0.19), 0.03)
+	_flash_mesh = Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1)
+	_chunk_mesh = Models.box_mesh(Vector3(0.24, 0.2, 0.24), 0.035)
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.42
 	ring.outer_radius = 0.5
@@ -876,17 +894,25 @@ func _settle_cell() -> Vector2i:
 ## blocks, pods and live flames, through warps. Zero means wait (the way is
 ## shut for now, say by a flame).
 func _walk_step() -> Vector2i:
-	var first: Dictionary = _hero_search(true, false)["first"]
+	var key: Array = [hero_cell(), walk_goal, can_kick, flames.size(), pod_at.keys(), hero_pass.size()]
+	_walk_age += get_process_delta_time()
+	if key == _walk_key and _walk_age < WALK_REFRESH:
+		return _walk_dir
+	_walk_key = key
+	_walk_age = 0.0
+	var first: Dictionary = _hero_search(true, false, walk_goal)["first"]
 	if not first.has(walk_goal) and can_kick:
-		first = _hero_search(true, true)["first"]
-	return first.get(walk_goal, Vector2i.ZERO)
+		first = _hero_search(true, true, walk_goal)["first"]
+	_walk_dir = first.get(walk_goal, Vector2i.ZERO)
+	return _walk_dir
 
 
 ## Breadth-first search from Pip's tile over the tiles he can walk. Gives
 ## {"first": {tile: first step}, "dist": {tile: steps}}. Stepping on a warp
 ## lands on its partner. [param strict] also avoids live flames and pods
-## (unless [param through_pods], for kicking them out of the way).
-func _hero_search(strict: bool, through_pods: bool) -> Dictionary:
+## (unless [param through_pods], for kicking them out of the way). With a
+## [param goal], stops as soon as that tile is reached.
+func _hero_search(strict: bool, through_pods: bool, goal: Vector2i = NO_CELL) -> Dictionary:
 	var start: Vector2i = hero_cell()
 	var first: Dictionary = {start: Vector2i.ZERO}
 	var dist: Dictionary = {start: 0}
@@ -910,6 +936,8 @@ func _hero_search(strict: bool, through_pods: bool) -> Dictionary:
 					queue.append(w)
 			else:
 				queue.append(n)
+			if goal != NO_CELL and first.has(goal):
+				return {"first": first, "dist": dist}
 	return {"first": first, "dist": dist}
 
 
@@ -1189,28 +1217,85 @@ func _add_flame(c: Vector2i, dist: int, dir: Vector2i) -> void:
 	kit.on_flame(c)
 	# A cluster of tumbling fire cubes round a white-hot core cube. Arms lay
 	# their cubes along the blast line so the beam reads as solid.
-	var node := Node3D.new()
+	var arm: bool = dir != Vector2i.ZERO
+	var node: Node3D = _flame_node(arm)
 	node.position = Vector3(c.x, 0.34, c.y)
-	add_child(node)
+	node.rotation = Vector3(0.0, atan2(-float(dir.y), float(dir.x)) if arm else 0.0, 0.0)
 	var spots: Array[Vector3] = []
-	if dir == Vector2i.ZERO:
-		spots = [Vector3(0.2, 0.0, 0.2), Vector3(-0.2, 0.05, 0.2), Vector3(0.2, 0.05, -0.2), Vector3(-0.2, 0.0, -0.2)]
-	else:
-		node.rotation.y = atan2(-float(dir.y), float(dir.x))
+	if arm:
 		spots = [Vector3(-0.3, 0.0, rng.randf_range(-0.08, 0.08)), Vector3(0.0, 0.06, rng.randf_range(-0.08, 0.08)), Vector3(0.3, 0.0, rng.randf_range(-0.08, 0.08))]
-	for s: Vector3 in spots:
-		var cube := Models.part(node, _flame_mesh, Models.FLAME, s, 1.1)
+	else:
+		spots = [Vector3(0.2, 0.0, 0.2), Vector3(-0.2, 0.05, 0.2), Vector3(0.2, 0.05, -0.2), Vector3(-0.2, 0.0, -0.2)]
+	var cubes: Array[Node3D] = []
+	var spins: Array[Vector3] = []
+	for i in node.get_child_count():
+		var cube := node.get_child(i) as Node3D
+		cubes.append(cube)
+		if i < spots.size():
+			cube.position = spots[i]
+			cube.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+			cube.scale = Vector3.ONE * rng.randf_range(0.95, 1.2)
+			spins.append(Vector3(rng.randf_range(-5, 5), rng.randf_range(-5, 5), rng.randf_range(-5, 5)))
+		else:
+			cube.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, 0)
+			cube.scale = Vector3.ONE * (0.8 if arm else 1.05)
+			spins.append(Vector3(0, rng.randf_range(-7, 7), 0))
+	node.scale = Vector3.ONE * 0.01
+	node.visible = true
+	_fx.append({"node": node, "t": -dist * 0.022, "life": FLAME_TIME, "kind": &"flame",
+		"arm": arm, "cubes": cubes, "spins": spins})
+
+
+## A flame cluster: from the pool when one is free, else built (fire cubes
+## then the core: 3 cubes for an arm, 4 for the middle).
+func _flame_node(arm: bool) -> Node3D:
+	var spare: Array = _flame_pool[arm]
+	if not spare.is_empty():
+		var used: Node3D = spare.pop_back()
+		# Back to plain fire colours (a world may have dyed it).
+		var last: int = used.get_child_count() - 1
+		for i in used.get_child_count():
+			(used.get_child(i) as MeshInstance3D).material_override = \
+				Models.mat(Models.FLAME_CORE, 1.8) if i == last else Models.mat(Models.FLAME, 1.1)
+		return used
+	var node := Node3D.new()
+	add_child(node)
+	for i in (3 if arm else 4):
+		var cube := Models.part(node, _flame_mesh, Models.FLAME, Vector3.ZERO, 1.1)
 		cube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		cube.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
-		cube.scale = Vector3.ONE * rng.randf_range(0.95, 1.2)
-		cube.set_meta(&"spin", Vector3(rng.randf_range(-5, 5), rng.randf_range(-5, 5), rng.randf_range(-5, 5)))
 	var core := Models.part(node, _flame_mesh, Models.FLAME_CORE, Vector3(0, 0.08, 0), 1.8)
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	core.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, 0)
-	core.scale = Vector3.ONE * (1.05 if dir == Vector2i.ZERO else 0.8)
-	core.set_meta(&"spin", Vector3(0, rng.randf_range(-7, 7), 0))
-	node.scale = Vector3.ONE * 0.01
-	_fx.append({"node": node, "t": -dist * 0.022, "life": FLAME_TIME, "kind": &"flame"})
+	return node
+
+
+## A one-piece effect (a spark, chip, puff...) to list in [member _fx] with
+## "pool": true, so it is reused once done. Taken from the pool when it can.
+func fx_part(mesh: Mesh, color: Color, pos: Vector3, glow: float = 0.0, shadow: bool = false) -> MeshInstance3D:
+	var n: MeshInstance3D
+	if _fx_pool.is_empty():
+		n = Models.part(self, mesh, color, pos, glow)
+	else:
+		n = _fx_pool.pop_back()
+		n.mesh = mesh
+		n.material_override = Models.mat(color, glow)
+		n.position = pos
+		n.rotation = Vector3.ZERO
+		n.scale = Vector3.ONE
+		n.visible = true
+	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return n
+
+
+## Puts a finished effect's node away for reuse, or frees it.
+func _fx_done(f: Dictionary, n: Node3D) -> void:
+	if f.get("pool", false) and _fx_pool.size() < FX_POOL_MAX:
+		n.visible = false
+		_fx_pool.append(n)
+	elif f["kind"] == &"flame" and f.has("arm") and (_flame_pool[f["arm"]] as Array).size() < 40:
+		n.visible = false
+		(_flame_pool[f["arm"]] as Array).append(n)
+	else:
+		n.queue_free()
 
 
 func _update_flames(delta: float) -> void:
@@ -1231,28 +1316,26 @@ func _break_crate(c: Vector2i) -> void:
 	# The crate cracks apart: a quick white flash, planks and band bits that
 	# fly out, bounce on the floor and lie there a moment, and a dust ring.
 	var at := Vector3(c.x, 0.4, c.y)
-	var flash := Models.part(self, Models.box_mesh(Vector3(0.84, 0.8, 0.84), 0.1), Color.WHITE, at, 2.0)
-	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_fx.append({"node": flash, "t": 0.0, "life": 0.12, "kind": &"flash"})
-	var chunk := Models.box_mesh(Vector3(0.24, 0.2, 0.24), 0.035)
+	var flash := fx_part(_flash_mesh, Color.WHITE, at, 2.0)
+	_fx.append({"node": flash, "t": 0.0, "life": 0.12, "kind": &"flash", "pool": true})
+	var chunk: Mesh = _chunk_mesh
 	for k in 12:
 		var plank: bool = k < 8
 		var color: Color = Models.WOOD if plank else Models.WOOD_DARK
-		var n := Models.part(self, _plank_mesh if plank else chunk, color, at + Vector3(rng.randf_range(-0.2, 0.2), rng.randf_range(-0.2, 0.25), rng.randf_range(-0.2, 0.2)))
+		var n := fx_part(_plank_mesh if plank else chunk, color, at + Vector3(rng.randf_range(-0.2, 0.2), rng.randf_range(-0.2, 0.25), rng.randf_range(-0.2, 0.2)), 0.0, true)
 		n.rotation = Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
 		if Models.GLASS:
 			n.material_override = Models.glass(color, 0.3 if plank else 0.7, 0.1)
 		var a: float = TAU * k / 12.0 + rng.randf_range(-0.3, 0.3)
 		var out: float = rng.randf_range(2.2, 4.2)
-		_fx.append({"node": n, "t": 0.0, "life": rng.randf_range(1.0, 1.3), "kind": &"debris", "floor": 0.06,
+		_fx.append({"node": n, "t": 0.0, "life": rng.randf_range(1.0, 1.3), "kind": &"debris", "floor": 0.06, "pool": true,
 			"vel": Vector3(cos(a) * out, rng.randf_range(3.5, 6.0), sin(a) * out),
 			"spin": Vector3(rng.randf_range(-14, 14), rng.randf_range(-14, 14), rng.randf_range(-14, 14))})
 	for k in 6:
 		var a2: float = TAU * k / 6.0 + rng.randf() * 0.5
-		var d := Models.part(self, _smoke_mesh, Models.WOOD.lerp(Color("#F4ECE4"), 0.6), Vector3(c.x + cos(a2) * 0.25, 0.15, c.y + sin(a2) * 0.25))
-		d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var d := fx_part(_smoke_mesh, Models.WOOD.lerp(Color("#F4ECE4"), 0.6), Vector3(c.x + cos(a2) * 0.25, 0.15, c.y + sin(a2) * 0.25))
 		d.rotation.y = rng.randf() * TAU
-		_fx.append({"node": d, "t": 0.0, "life": 0.55, "kind": &"dust", "vel": Vector3(cos(a2) * 1.8, 0.5, sin(a2) * 1.8)})
+		_fx.append({"node": d, "t": 0.0, "life": 0.55, "kind": &"dust", "pool": true, "vel": Vector3(cos(a2) * 1.8, 0.5, sin(a2) * 1.8)})
 	Sfx.play(&"crunch", 0.12)
 	_shake = maxf(_shake, 0.22)
 	if not demo:
@@ -1541,10 +1624,9 @@ func _pose_critter(cr: Critter, delta: float) -> void:
 
 func _spawn_sparkles(at: Vector3, color: Color) -> void:
 	for k in 10:
-		var n := Models.part(self, _spark_mesh, color, at, 1.5)
-		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var n := fx_part(_spark_mesh, color, at, 1.5)
 		var a: float = TAU * k / 10.0
-		_fx.append({"node": n, "t": 0.0, "life": 0.6, "kind": &"spark",
+		_fx.append({"node": n, "t": 0.0, "life": 0.6, "kind": &"spark", "pool": true,
 			"vel": Vector3(cos(a) * 2.2, rng.randf_range(1.5, 3.0), sin(a) * 2.2),
 			"spin": Vector3(rng.randf_range(-10, 10), rng.randf_range(-10, 10), 0)})
 
@@ -1553,17 +1635,21 @@ func _spawn_confetti(at: Vector3) -> void:
 	var colors: Array[Color] = [Color("#FF8FA3"), Color("#FFE27A"), Color("#7FE3C4"), Color("#9FC9E8"), Color("#F2A541")]
 	var mesh := Models.box_mesh(Vector3(0.12, 0.03, 0.08), 0.01)
 	for k in 36:
-		var n := Models.part(self, mesh, colors[k % colors.size()], at, 0.4)
-		n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var n := fx_part(mesh, colors[k % colors.size()], at, 0.4)
 		var a: float = rng.randf() * TAU
-		_fx.append({"node": n, "t": 0.0, "life": 1.6, "kind": &"debris",
+		_fx.append({"node": n, "t": 0.0, "life": 1.6, "kind": &"debris", "pool": true,
 			"vel": Vector3(cos(a) * rng.randf_range(1.0, 3.0), rng.randf_range(4.0, 7.0), sin(a) * rng.randf_range(1.0, 3.0)),
 			"spin": Vector3(rng.randf_range(-12, 12), rng.randf_range(-12, 12), rng.randf_range(-12, 12)), "drag": true})
 
 
 func _update_fx(delta: float) -> void:
-	var keep: Array[Dictionary] = []
-	for f: Dictionary in _fx:
+	# Finished effects drop out in place (no new list each frame). Effects
+	# added while this runs (smoke from a dying flame) are handled too.
+	var w: int = 0
+	var i: int = 0
+	while i < _fx.size():
+		var f: Dictionary = _fx[i]
+		i += 1
 		f["t"] += delta
 		var t: float = f["t"]
 		var n: Node3D = f["node"]
@@ -1572,9 +1658,10 @@ func _update_fx(delta: float) -> void:
 		if t >= f["life"]:
 			if f["kind"] == &"flame":
 				_spawn_smoke(n.position)
-			n.queue_free()
+			_fx_done(f, n)
 			continue
-		keep.append(f)
+		_fx[w] = f
+		w += 1
 		match f["kind"]:
 			&"flame":
 				if t < 0.0:
@@ -1592,9 +1679,10 @@ func _update_fx(delta: float) -> void:
 					s = lerpf(1.0, 0.0, (u - 0.7) / 0.3)
 				n.scale = Vector3.ONE * maxf(s, 0.01)
 				n.position.y = 0.34 + maxf(u - 0.6, 0.0) * 0.5
-				for ch: Node in n.get_children():
-					var cube := ch as Node3D
-					cube.rotation += (cube.get_meta(&"spin", Vector3.ZERO) as Vector3) * delta
+				var cubes: Array[Node3D] = f["cubes"]
+				var spins: Array[Vector3] = f["spins"]
+				for j in cubes.size():
+					cubes[j].rotation += spins[j] * delta
 			&"debris", &"spark":
 				var v: Vector3 = f["vel"]
 				v.y -= (11.0 if f["kind"] == &"debris" else 6.0) * delta
@@ -1638,33 +1726,30 @@ func _update_fx(delta: float) -> void:
 				var u2: float = t / f["life"]
 				var big: float = 1.6 if f.get("big", false) else 1.0
 				n.scale = Vector3(1.0 + u2 * 0.6, maxf(1.0 - u2 * 1.4, 0.01), 1.0 + u2 * 0.6) * big * (1.0 - u2 * 0.6)
-	_fx = keep
+	_fx.resize(w)
 
 
 ## A flat shockwave ring that races out from a blast.
 func _spawn_ring(at: Vector3, color: Color, size: float) -> void:
-	var n := Models.part(self, _ring_mesh, color, at, 1.6)
-	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var n := fx_part(_ring_mesh, color, at, 1.6)
 	n.scale = Vector3.ONE * 0.1
-	_fx.append({"node": n, "t": 0.0, "life": 0.32, "kind": &"ring", "size": size * 2.0})
+	_fx.append({"node": n, "t": 0.0, "life": 0.32, "kind": &"ring", "pool": true, "size": size * 2.0})
 
 
 ## A dark burn mark left on the floor, which shrinks away after a while.
 func _spawn_scorch(at: Vector3) -> void:
-	var n := Models.part(self, _scorch_mesh, Models.GRASS_A.darkened(0.35), at)
-	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var n := fx_part(_scorch_mesh, Models.GRASS_A.darkened(0.35), at)
 	n.rotation.y = rng.randf() * TAU
 	var size: float = rng.randf_range(0.9, 1.1)
 	n.scale = Vector3(size, 1.0, size)
-	_fx.append({"node": n, "t": 0.0, "life": 1.8, "kind": &"scorch", "size": size})
+	_fx.append({"node": n, "t": 0.0, "life": 1.8, "kind": &"scorch", "pool": true, "size": size})
 
 
 func _spawn_smoke(at: Vector3) -> void:
 	if _fx.size() > 260:
 		return
-	var n := Models.part(self, _smoke_mesh, Color("#F4ECE4"), at + Vector3(randf_range(-0.15, 0.15), 0.1, randf_range(-0.15, 0.15)))
-	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_fx.append({"node": n, "t": 0.0, "life": 0.7, "kind": &"smoke"})
+	var n := fx_part(_smoke_mesh, Color("#F4ECE4"), at + Vector3(randf_range(-0.15, 0.15), 0.1, randf_range(-0.15, 0.15)))
+	_fx.append({"node": n, "t": 0.0, "life": 0.7, "kind": &"smoke", "pool": true})
 
 
 func _animate_scenery(delta: float) -> void:
