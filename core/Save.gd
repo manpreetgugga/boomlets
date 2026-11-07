@@ -4,9 +4,15 @@ extends Node
 ## place, so a crash mid-write never loses the save.
 
 const PATH: String = "user://boomlets.json"
+## Worlds after the first also need stars, this many per world before them
+## (World 2 opens at 10, World 3 at 20, ...), on top of beating the boss
+## before them. One rewarded ad opens a world without the stars.
+const STARS_PER_WORLD: int = 10
 
 var stars: Dictionary = {}      # "1-3" -> 0..3
 var best_time: Dictionary = {}  # "1-3" -> seconds
+## Worlds opened with a rewarded ad instead of stars: "3" -> true.
+var ad_opened: Dictionary = {}
 var music_on: bool = true
 var sound_on: bool = true
 var haptics_on: bool = true
@@ -42,9 +48,27 @@ func is_unlocked(world: int, level: int) -> bool:
 
 
 ## World 1 is always open; every other world opens once the one before it
-## has its last level (the boss) cleared.
+## has its last level (the boss) cleared and its star lock is open.
 func world_unlocked(world: int) -> bool:
-	return explore_all or world <= 1 or world_cleared(world - 1)
+	return explore_all or world <= 1 or (world_cleared(world - 1) and stars_open(world))
+
+
+## Stars needed in all to open [param world].
+func stars_to_open(world: int) -> int:
+	return STARS_PER_WORLD * (world - 1)
+
+
+## Whether [param world]'s star lock is open: enough stars, an ad watched for
+## it, or levels played there already (saves from before the lock existed).
+func stars_open(world: int) -> bool:
+	return world <= 1 or ad_opened.has(str(world)) or stars.has(key(world, 1)) \
+		or total_stars() >= stars_to_open(world)
+
+
+## Opens [param world]'s star lock after a rewarded ad, for good.
+func open_with_ad(world: int) -> void:
+	ad_opened[str(world)] = true
+	write()
 
 
 func world_cleared(world: int) -> bool:
@@ -81,7 +105,7 @@ func record(world: int, level: int, earned: int, seconds: float) -> bool:
 
 func write() -> void:
 	var data: Dictionary = {
-		"version": 1, "stars": stars, "best_time": best_time,
+		"version": 1, "stars": stars, "best_time": best_time, "ad_opened": ad_opened,
 		"music": music_on, "sound": sound_on, "haptics": haptics_on, "stats": stats_on,
 		"crash_reports": crash_reports_on, "world": last_world, "explore_all": explore_all,
 	}
@@ -103,6 +127,8 @@ func _load() -> void:
 	var d: Dictionary = parsed
 	stars = d.get("stars", {})
 	best_time = d.get("best_time", {})
+	var opened: Variant = d.get("ad_opened", {})
+	ad_opened = opened if opened is Dictionary else {}
 	music_on = bool(d.get("music", true))
 	sound_on = bool(d.get("sound", true))
 	haptics_on = bool(d.get("haptics", true))

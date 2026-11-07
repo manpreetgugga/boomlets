@@ -71,7 +71,7 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floatin
 
 ## Worlds
 
-Each world has its own look, music, twist, critter and boss, across six levels. Beat a world's boss to open the next one. There are 450 stars in all.
+Each world has its own look, music, twist, critter and boss, across six levels. To open the next world, beat its boss and have enough stars: 10 for each world so far (World 2 opens at 10, World 3 at 20, and so on). Short of stars? Replay levels for more, or watch a short ad to open it. There are 450 stars in all.
 
 | # | World | Twist | New critter | Boss |
 |---|---|---|---|---|
@@ -113,7 +113,7 @@ Android exports use Godot's Gradle build, because of the ads and analytics plugi
 
 ### Ads, analytics and privacy
 
-- **Ads:** [Poing Studios AdMob plugin](https://github.com/poingstudios/godot-admob-plugin) 5.1. A rewarded ad offers an extra life on "Out of lives!", and an interstitial plays now and then between levels (at most every 3 finished levels, 2.5 minutes apart, never in the first few levels). Debug builds always use Google's test ads.
+- **Ads:** [Poing Studios AdMob plugin](https://github.com/poingstudios/godot-admob-plugin) 5.1. A rewarded ad offers an extra life on "Out of lives!" (up to 3 per try) and opens a world the player is short of stars for, and an interstitial plays now and then between levels (at most every 3 finished levels, 2.5 minutes apart, never in the first few levels). Debug builds always use Google's test ads.
 - **Analytics:** [Godotx Firebase](https://github.com/godot-x/firebase) 3.1 (Core and Analytics). Events: `level_start`, `level_end` and rewarded-ad events.
 - **Crash reports:** Godotx Firebase Crashlytics + `firebase-crashlytics-ndk`, so engine and graphics-driver crashes are caught too. Reports carry the GPU, driver and renderer as custom keys, and a `level_start` trail. Unlike Analytics, Crashlytics is on from the first launch (so a crash at start-up still reports), then follows the consent answer once Google's check has one; the Privacy card has a "Crash reports" switch. Local change: `addons/godotx_firebase/export_plugin.gd` no longer writes `firebase_crashlytics_collection_enabled=false` into the manifest; keep that change when updating the addon.
 - **Consent:** Google's consent form (UMP) runs at start-up where the law requires it. Firebase starts with collection off and every consent signal denied, and turns on only where no consent is needed or the player agreed. The menu's **Privacy** card has "Play stats" and "Crash reports" switches, "Ad choices" (where it applies) and the privacy policy.

@@ -414,12 +414,14 @@ func _show_map(from_dir: int = 0) -> void:
 		tw.tween_property(root, "position:x", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
-## The card over a locked world's trail, naming the boss that opens it.
+## The card over a locked world's trail: what opens it (beating the boss
+## before it, and enough stars in all) and, once that boss is beaten but
+## stars are short, a rewarded ad that opens it without them.
 func _lock_card() -> Control:
 	var card := Ui.card(Color(Ui.CREAM, 0.96), 40)
 	card.set_anchors_preset(Control.PRESET_CENTER)
-	card.size = Vector2(440, 0)
-	card.position = Vector2(-220, -170)
+	card.size = Vector2(460, 0)
+	card.position = Vector2(-230, -230)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override(&"separation", 2)
 	var icon := Control.new()
@@ -429,10 +431,49 @@ func _lock_card() -> Control:
 	box.add_child(icon)
 	box.add_child(Ui.label("Locked", 50, Ui.INK, 900))
 	var boss: String = Levels.kit(world - 1).boss_name().capitalize()
-	box.add_child(Ui.label("Beat %s\nto open" % boss, 32, Ui.INK_SOFT, 800))
+	var need: int = Save.stars_to_open(world)
+	var beaten: bool = Save.world_cleared(world - 1)
+	var stars_ok: bool = Save.stars_open(world)
+	var how: String = "Beat %s\nto open" % boss
+	if not stars_ok:
+		how = "Collect %d ★ to open" % need if beaten else "Beat %s and\ncollect %d ★ to open" % [boss, need]
+	box.add_child(Ui.label(how, 32, Ui.INK_SOFT, 800))
+	if not stars_ok:
+		box.add_child(Ui.label("You have %d ★" % Save.total_stars(), 30, Ui.INK, 900))
+	if beaten and not stars_ok:
+		var gap := Control.new()
+		gap.custom_minimum_size = Vector2(0, 12)
+		box.add_child(gap)
+		var b := Btn.make("Unlock now (ad)", &"play", Vector2(400, 100), Ui.YELLOW)
+		b.font_size = 32
+		b.pressed.connect(_unlock_with_ad.bind(b))
+		var holder := CenterContainer.new()
+		holder.add_child(b)
+		box.add_child(holder)
+		box.add_child(Ui.label("or replay levels for more stars", 24, Ui.INK_SOFT, 800))
 	card.add_child(box)
 	card.resized.connect(func() -> void: card.pivot_offset = card.size * 0.5)
 	return card
+
+
+## The lock card's ad button: a rewarded ad opens this world for good,
+## stars or not. Says so when no ad has loaded yet.
+func _unlock_with_ad(b: Btn) -> void:
+	if _busy:
+		return
+	if not Services.has_rewarded():
+		Sfx.play(&"error")
+		b.text = "No ad ready yet"
+		b.queue_redraw()
+		return
+	var w: int = world
+	Services.show_rewarded("unlock_world", func(earned: bool) -> void:
+		if not earned:
+			return
+		Save.open_with_ad(w)
+		Sfx.play(&"win", 0.0)
+		if screen == &"map" and world == w:
+			_go(_show_map))
 
 
 func _wiggle(c: Control) -> void:
@@ -580,7 +621,12 @@ func _next_level() -> void:
 		_start_level(level + 1)
 	elif world < Levels.WORLD_COUNT:
 		world += 1
-		_start_level(1)
+		# Short of stars for the next world: its map, where the lock card
+		# says how many and offers the ad.
+		if Save.world_unlocked(world):
+			_start_level(1)
+		else:
+			_show_map()
 	else:
 		_show_map()
 
