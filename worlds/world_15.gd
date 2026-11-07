@@ -854,7 +854,7 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 ## Cranes glide straight on until something stops them, and swoop at Pip
 ## when he is in line and close with nothing in between.
 func _crane_step(cr: Arena.Critter) -> Vector2i:
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	if not arena.demo and arena.hero_alive:
 		var hc: Vector2i = arena.hero_cell()
 		var gap: Vector2i = hc - cr.cell
@@ -878,7 +878,7 @@ func _crane_step(cr: Arena.Critter) -> Vector2i:
 ## Frogs pick a hop whose landing tile is safe, keep going the same way most
 ## of the time, and (in later levels) hop towards Pip.
 func _frog_step(cr: Arena.Critter) -> Vector2i:
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	var options: Array[Vector2i] = []
 	for d: Vector2i in Arena.DIRS:
 		if not arena._critter_can_enter(cr, cr.cell + d):

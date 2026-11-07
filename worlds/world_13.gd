@@ -711,7 +711,7 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 			open.append(d)
 	if open.is_empty():
 		return Vector2i.ZERO
-	var danger: Dictionary = arena._danger_cells() if not arena.demo else {}
+	var danger: Dictionary = arena._critter_danger(cr) if not arena.demo else {}
 	var safe: Array[Vector2i] = []
 	for d: Vector2i in open:
 		if not danger.has(cr.cell + d) or danger.has(cr.cell):

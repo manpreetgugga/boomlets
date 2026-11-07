@@ -13,6 +13,8 @@ extends RefCounted
 ## _spawn_scorch(at), _spawn_confetti(at), _fx (effect list, see
 ## _update_fx; make one-piece effects with fx_part() and add "pool": true
 ## so they are reused), _shake (camera shake amount), _hitstop(seconds),
+## _critter_danger(cr) (what a critter dodges: it notices pods late, close
+## by, and not always), _hero_danger() (every blast, for tiles Pip is put on),
 ## _danger_cells(), _kill_critter(cr), _hurt_hero(), _spawn_critter(kind, c),
 ## _spawn_pickup(c, kind) and _blast(c, reach). Sounds: Sfx.play(cue) for
 ## the built-in cues (boom, crunch, place, pop, hurt, kick, gate, boss_hit,

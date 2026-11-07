@@ -712,7 +712,7 @@ func _bleeper_step(cr: Arena.Critter) -> Vector2i:
 		var v0: int = 1 if cr.cell.y < 7 else -1
 		_march[cr] = {"h": Vector2i(1, 0) if arena.rng.randf() < 0.5 else Vector2i(-1, 0), "v": v0}
 	var st: Dictionary = _march[cr]
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	var h: Vector2i = st["h"]
 	if _ok(cr, cr.cell + h, danger):
 		return h
@@ -731,7 +731,7 @@ func _bleeper_step(cr: Arena.Critter) -> Vector2i:
 ## Blips shoot along straight lines; when stopped they ricochet off to the
 ## side or straight back.
 func _blip_step(cr: Arena.Critter) -> Vector2i:
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	if _ok(cr, cr.cell + cr.dir, danger):
 		return cr.dir
 	var side: Array[Vector2i] = [Vector2i(cr.dir.y, cr.dir.x), Vector2i(-cr.dir.y, -cr.dir.x)]

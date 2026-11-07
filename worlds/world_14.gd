@@ -682,7 +682,7 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 	if cr.kind == &"cartbug" and rails.has(cr.cell) and arena.rng.randf() < 0.85:
 		var along: Vector2i = Vector2i(1, 0) if int(rails[cr.cell]) == 0 else Vector2i(0, 1)
 		var first: Vector2i = cr.dir if (cr.dir == along or cr.dir == -along) else along
-		var danger: Dictionary = arena._danger_cells()
+		var danger: Dictionary = arena._critter_danger(cr)
 		for cand: Vector2i in [first, -first]:
 			var n: Vector2i = cr.cell + cand
 			if rails.has(n) and arena._critter_can_enter(cr, n) and not danger.has(n):

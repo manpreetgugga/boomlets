@@ -18,7 +18,6 @@ const Art := preload("res://worlds/world_7_art.gd")
 
 const NONE := Vector2i(-999, -999)
 const BAT_SPEED: float = 2.4
-const BAT_DODGE: float = 0.8
 const MAX_BOUNCES: int = 6
 const SHIELD_TURN: float = 0.9
 
@@ -194,7 +193,6 @@ var _pinged: int = -1
 # Bats.
 var _bats: Dictionary = {}   # Critter -> {"h", "v", "flip"}
 var _bat_danger: Dictionary = {}
-var _bat_danger_frame: int = -1
 # The golem's shield.
 var _shield: Vector2i = Vector2i(0, 1)
 var _shield_t: float = SHIELD_TURN
@@ -621,17 +619,16 @@ func _bat(cr: Arena.Critter) -> Dictionary:
 	return _bats[cr]
 
 
-## Cells a bat should keep out of: the arena's danger cells plus where
-## soon-to-burst pods will bounce off mirrors and prisms.
-func _danger() -> Dictionary:
-	var frame: int = Engine.get_process_frames()
-	if frame == _bat_danger_frame:
-		return _bat_danger
-	_bat_danger_frame = frame
-	_bat_danger = arena._danger_cells().duplicate()
+## Cells a bat should keep out of: live flames, plus the blast lines (and
+## their bounces off mirrors and prisms) of pods it has noticed. Like every
+## critter it only notices pods close by and about to burst (see Arena's
+## critter_notice and critter_sight).
+func _danger(cr: Arena.Critter) -> Dictionary:
+	_bat_danger = arena.flames.duplicate()
 	for p: Arena.Pod in arena.pods:
-		if p.timer > 1.4:
+		if p.timer > arena.critter_notice or absi(p.cell.x - cr.cell.x) + absi(p.cell.y - cr.cell.y) > arena.critter_sight:
 			continue
+		_bat_danger[p.cell] = true
 		for d: Vector2i in Arena.DIRS:
 			_predict(p.cell, d, p.fire, 0)
 	return _bat_danger
@@ -665,8 +662,9 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 	s["flip"] = not flip
 	var first := Vector2i(int(s["h"]), 0) if flip else Vector2i(0, int(s["v"]))
 	var second := Vector2i(0, int(s["v"])) if flip else Vector2i(int(s["h"]), 0)
-	var dodge: bool = rng.randf() < BAT_DODGE
-	var danger: Dictionary = _danger() if dodge else {}
+	# Now and then a bat does not look where it flies (Arena's critter_miss).
+	var dodge: bool = rng.randf() >= arena.critter_miss
+	var danger: Dictionary = _danger(cr) if dodge else {}
 	for d: Vector2i in [first, second, -first, -second]:
 		var n: Vector2i = cr.cell + d
 		if not arena._critter_can_enter(cr, n) or danger.has(n):

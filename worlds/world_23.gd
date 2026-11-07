@@ -903,7 +903,8 @@ func _update_ponds(delta: float) -> void:
 ## Finds the nearest dry, safe tile and glides Pip there along the ice.
 func _nudge_hero() -> void:
 	var start: Vector2i = arena.hero_cell()
-	var danger: Dictionary = arena._danger_cells()
+	# Pip's own sense of danger: every pod's blast, however long its fuse.
+	var danger: Dictionary = arena._hero_danger()
 	for strict: bool in [true, false]:
 		var prev: Dictionary = {start: start}
 		var queue: Array[Vector2i] = [start]
@@ -1007,7 +1008,7 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 		opts.append(Vector2i(signi(gap.x), 0))
 	if gap.y != 0:
 		opts.append(Vector2i(0, signi(gap.y)))
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	for d: Vector2i in opts:
 		if arena._critter_can_enter(cr, cr.cell + d) and not danger.has(cr.cell + d):
 			return d

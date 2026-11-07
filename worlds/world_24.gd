@@ -760,7 +760,7 @@ func _update_ghost_pods(delta: float) -> void:
 		var node: Node3D = g["node"]
 		var body: Node3D = node.get_node("Body")
 		var age: float = g["age"]
-		var hurry: float = clampf(1.0 - float(g["timer"]) / Arena.FUSE, 0.0, 1.0)
+		var hurry: float = clampf(1.0 - float(g["timer"]) / arena.fuse, 0.0, 1.0)
 		var pulse: float = 1.0 + sin(age * (6.0 + hurry * 18.0)) * (0.04 + hurry * 0.06)
 		if age > 0.2:
 			body.scale = body.scale.lerp(Vector3(pulse, 2.0 - pulse, pulse), minf(delta * 14.0, 1.0))
@@ -796,7 +796,7 @@ func ghost_danger() -> Dictionary:
 	_ghost_frame = frame
 	_ghost_danger = {}
 	for g: Dictionary in ghost_pods:
-		if float(g["timer"]) > 1.4:
+		if float(g["timer"]) > arena.critter_notice:
 			continue
 		var c: Vector2i = g["cell"]
 		_ghost_danger[c] = true
@@ -904,7 +904,7 @@ func _mfrog_step(cr: Arena.Critter) -> Vector2i:
 ## The heron hunts Pip on his side and the Shade on the other, and steps
 ## round both kinds of pods.
 func _heron_step(cr: Arena.Critter) -> Vector2i:
-	var danger: Dictionary = arena._danger_cells().duplicate()
+	var danger: Dictionary = arena._critter_danger(cr)
 	danger.merge(ghost_danger())
 	var open: Array[Vector2i] = _open_dirs(cr, danger)
 	if open.is_empty():

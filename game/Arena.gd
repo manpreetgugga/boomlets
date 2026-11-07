@@ -34,14 +34,22 @@ const HUD_TOP: float = 170.0
 const WALK_REFRESH: float = 0.25
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1, &"boss": 1.0}
-## Every critter (and boss) walks at this share of its listed speed: a
-## gentler pace so levels stay a challenge without feeling unfair.
-const CRITTER_PACE: float = 0.85
-## Worlds up to this one are the gentle start: slower critters, buzzers that
-## only notice Pip close by, and a longer fuse.
+## Difficulty eases in over the worlds. Each pair below is (gentlest, last
+## world): worlds up to EASY_WORLDS get the first, the last world gets the
+## second and the worlds between step smoothly from one to the other.
 const EASY_WORLDS: int = 5
-const EASY_PACE: float = 0.75
-const EASY_FUSE: float = 3.0
+## Seconds a pod takes to go off.
+const FUSE_RANGE := Vector2(3.0, 2.7)
+## Share of its listed speed every critter (and boss) walks at.
+const PACE_RANGE := Vector2(0.68, 0.78)
+## How close Pip must be (tiles along the grid) before a buzzer chases him.
+const CHASE_RANGE := Vector2(4.0, 6.0)
+## Critters notice a ticking pod only in its last this-many seconds...
+const NOTICE_RANGE := Vector2(0.6, 1.0)
+## ...and now and then not at all: the chance they miss one.
+const MISS_RANGE := Vector2(0.35, 0.15)
+## Critters only see pods this close (tiles along the grid).
+const CRITTER_SIGHT: int = 3
 ## Lives at the start of a level (one more with [member assist]).
 const START_LIVES: int = 4
 ## Seconds Pip cannot be hurt after coming back.
@@ -120,9 +128,13 @@ var lives: int = START_LIVES
 ## Set before setup() after the player lost this level twice in a row: one
 ## more life and slower critters, quietly.
 var assist: bool = false
-## This level's fuse and critter pace (see EASY_WORLDS and assist).
+## This level's fuse and critter settings (see EASY_WORLDS and assist).
 var fuse: float = FUSE
-var critter_pace: float = CRITTER_PACE
+var critter_pace: float = PACE_RANGE.x
+var critter_chase: int = int(CHASE_RANGE.x)
+var critter_notice: float = NOTICE_RANGE.x
+var critter_miss: float = MISS_RANGE.x
+var critter_sight: int = CRITTER_SIGHT
 var max_pods: int = 1
 var fire: int = 2
 var speed: float = BASE_SPEED
@@ -200,9 +212,12 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	kit = Levels.make_kit(world)
 	kit.arena = self
 	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
-	var easy: bool = world <= EASY_WORLDS
-	fuse = EASY_FUSE if easy else FUSE
-	critter_pace = (EASY_PACE if easy else CRITTER_PACE) * (0.85 if assist else 1.0)
+	var ramp: float = clampf(float(world - EASY_WORLDS) / float(Levels.WORLD_COUNT - EASY_WORLDS), 0.0, 1.0)
+	fuse = lerpf(FUSE_RANGE.x, FUSE_RANGE.y, ramp)
+	critter_pace = lerpf(PACE_RANGE.x, PACE_RANGE.y, ramp) * (0.85 if assist else 1.0)
+	critter_chase = roundi(lerpf(CHASE_RANGE.x, CHASE_RANGE.y, ramp))
+	critter_notice = lerpf(NOTICE_RANGE.x, NOTICE_RANGE.y, ramp)
+	critter_miss = lerpf(MISS_RANGE.x, MISS_RANGE.y, ramp)
 	lives = START_LIVES + (1 if assist else 0)
 	if not Models.palette_locked:
 		Models.use_palette(kit.palette())
@@ -917,15 +932,15 @@ func _update_hero(delta: float) -> void:
 		var settle: Vector2i = _settle_cell()
 		if settle != NO_CELL:
 			# On the goal (or a warp pad): ease onto the middle of the tile.
-			var before: Vector2 = hero_pos
-			hero_pos = hero_pos.move_toward(Vector2(settle), speed * delta * kit.hero_speed_scale(hero_cell()))
-			var step: Vector2 = hero_pos - before
-			if step.length_squared() > 1e-8:
-				moved_dir = Vector2i(roundi(signf(step.x)), 0) if absf(step.x) > absf(step.y) else Vector2i(0, roundi(signf(step.y)))
-			elif settle == walk_goal:
+			moved_dir = _ease_to(Vector2(settle), delta)
+			if moved_dir == Vector2i.ZERO and settle == walk_goal:
 				walk_goal = NO_CELL
 		else:
 			want = _walk_step()
+			if want == Vector2i.ZERO and _may_center():
+				# Waiting (for a blast to pass, say): finish the step onto the
+				# middle of the tile rather than stand astride two.
+				moved_dir = _ease_to(Vector2(hero_cell()), delta)
 	if want != Vector2i.ZERO:
 		var dist: float = speed * delta * kit.hero_speed_scale(hero_cell())
 		if _try_move(want, dist):
@@ -997,6 +1012,33 @@ func _pose_hero(delta: float) -> void:
 	_shield_node.visible = shield
 	if shield:
 		_shield_node.scale = Vector3.ONE * (1.0 + sin(_clock * 5.0) * 0.04)
+
+
+## Moves Pip straight toward [param to] (a point inside his tile) at walking
+## speed; the direction he went, or zero once he is there.
+func _ease_to(to: Vector2, delta: float) -> Vector2i:
+	var before: Vector2 = hero_pos
+	hero_pos = hero_pos.move_toward(to, speed * delta * kit.hero_speed_scale(hero_cell()))
+	var step: Vector2 = hero_pos - before
+	if step.length_squared() <= 1e-8:
+		return Vector2i.ZERO
+	return Vector2i(roundi(signf(step.x)), 0) if absf(step.x) > absf(step.y) else Vector2i(0, roundi(signf(step.y)))
+
+
+## Whether Pip may step onto the middle of his tile while he waits: not on a
+## belt (it carries him) and not toward a critter almost in reach of it.
+func _may_center() -> bool:
+	if belts.has(hero_cell()):
+		return false
+	var mid := Vector2(hero_cell())
+	for cr: Critter in critters:
+		if kit.critter_hidden(cr):
+			continue
+		var near: float = (BOSS_REACH if cr.kind == &"boss" else CRITTER_REACH) + 0.45
+		var d_mid: float = cr.pos.distance_to(mid)
+		if d_mid < near and d_mid < cr.pos.distance_to(hero_pos):
+			return false
+	return true
 
 
 ## The tile Pip should ease onto directly instead of walking a path: his
@@ -1140,7 +1182,7 @@ func _safe_spot() -> Vector2i:
 
 
 ## Every tile a flame is on or a pod's blast will reach, whatever its fuse
-## (Pip plans ahead; critters only fear pods about to go, see _danger_cells).
+## (Pip plans ahead; critters only fear pods about to go, see _critter_danger).
 func _hero_danger() -> Dictionary:
 	var frame: int = Engine.get_process_frames()
 	if frame == _hero_danger_frame:
@@ -1667,6 +1709,10 @@ func _burst_barrel(c: Vector2i, node: Node3D) -> void:
 	_shake = maxf(_shake, 0.28)
 
 
+## Live flames and the blast lines of pods in their last moments
+## (critter_notice), for spots with no particular critter in mind. A critter
+## picking its next step uses _critter_danger instead, which also limits how
+## far it sees and has it miss pods now and then.
 func _danger_cells() -> Dictionary:
 	var frame: int = Engine.get_process_frames()
 	if frame == _danger_frame:
@@ -1674,7 +1720,7 @@ func _danger_cells() -> Dictionary:
 	_danger_frame = frame
 	_danger = flames.duplicate()
 	for p: Pod in pods:
-		if p.timer > 1.4:
+		if p.timer > critter_notice:
 			continue
 		_danger[p.cell] = true
 		for d: Vector2i in DIRS:
@@ -1802,11 +1848,11 @@ func _choose_dir(cr: Critter) -> Vector2i:
 	var hc: Vector2i = hero_cell() if not demo else Vector2i(-99, -99)
 	var smart: bool = cr.kind == &"buzzer" or cr.kind == &"boss" or kit.critter_smart(cr.kind)
 	if smart:
-		var danger: Dictionary = _danger_cells()
+		var danger: Dictionary = _critter_danger(cr)
 		var safe: Array = open.filter(func(d: Vector2i) -> bool: return not danger.has(cr.cell + d))
 		if not safe.is_empty():
 			open = safe
-		var chase_range: int = 99 if cr.kind == &"boss" else (4 if world_id <= EASY_WORLDS else 7)
+		var chase_range: int = 99 if cr.kind == &"boss" else critter_chase
 		if not demo and hero_alive and absi(hc.x - cr.cell.x) + absi(hc.y - cr.cell.y) <= chase_range:
 			var step: Vector2i = _path_step(cr, hc)
 			if step != Vector2i.ZERO and open.has(step):
@@ -1817,6 +1863,20 @@ func _choose_dir(cr: Critter) -> Vector2i:
 	if turns.is_empty():
 		turns = open
 	return turns[rng.randi() % turns.size()]
+
+
+## The tiles a critter keeps off as it picks its next step: live flames, and
+## the blast lines of ticking pods it has noticed. Critters are a little slow
+## on the uptake: they notice a pod only in its last moments (critter_notice)
+## and within critter_sight tiles, and now and then (critter_miss) not at all.
+func _critter_danger(cr: Critter) -> Dictionary:
+	var out: Dictionary = flames.duplicate()
+	if pods.is_empty() or rng.randf() < critter_miss:
+		return out
+	for p: Pod in pods:
+		if p.timer <= critter_notice and absi(p.cell.x - cr.cell.x) + absi(p.cell.y - cr.cell.y) <= critter_sight:
+			_add_blast_cells(p.cell, p.fire, out)
+	return out
 
 
 ## The first step of the shortest walk from the critter to [param goal], or

@@ -966,7 +966,7 @@ func _can_march(cr: Arena.Critter, d: Vector2i) -> bool:
 		if other != cr and (other.cell == to or other.target == to) and other.kind == &"soldier":
 			return false
 	if not arena.demo:
-		var danger: Dictionary = arena._danger_cells()
+		var danger: Dictionary = arena._critter_danger(cr)
 		if danger.has(to) and not danger.has(cr.cell):
 			return false
 	return true

@@ -826,7 +826,8 @@ func _push_spot(ring: Dictionary, targets: Dictionary, push: Vector2i) -> Vector
 	for d: Vector2i in [push, away, Vector2i(push.y, push.x), Vector2i(-push.y, -push.x), -push]:
 		if d != Vector2i.ZERO and not cands.has(hc + d):
 			cands.append(hc + d)
-	var danger: Dictionary = arena._danger_cells()
+	# Pip's own sense of danger: every pod's blast, however long its fuse.
+	var danger: Dictionary = arena._hero_danger()
 	for strict: bool in [true, false]:
 		for c: Vector2i in cands:
 			if _push_ok(c, targets) and (not strict or not danger.has(c)):
@@ -1006,7 +1007,7 @@ func critter_step(cr: Arena.Critter) -> Vector2i:
 		return Vector2i.ZERO
 	# Otherwise hover straight on, turning only when blocked (or to line up
 	# with Pip now and then).
-	var danger: Dictionary = arena._danger_cells()
+	var danger: Dictionary = arena._critter_danger(cr)
 	var open: Array[Vector2i] = []
 	for d: Vector2i in Arena.DIRS:
 		var c: Vector2i = cr.cell + d
