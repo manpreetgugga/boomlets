@@ -197,6 +197,12 @@ func critter_hidden(_cr: Arena.Critter) -> bool:
 	return false
 
 
+## True while the critter can't react to anything (asleep, frozen...): pods
+## it spots don't daze it, and a stare it was in ends.
+func critter_busy(_cr: Arena.Critter) -> bool:
+	return false
+
+
 ## A blast caught the critter. Return true when handled here (the base
 ## rule kills it, or knocks a boss hit off).
 func critter_hit(_cr: Arena.Critter) -> bool:

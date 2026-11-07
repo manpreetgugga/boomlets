@@ -538,6 +538,11 @@ func critter_hidden(cr: Arena.Critter) -> bool:
 	return _hops.has(cr)
 
 
+## Stuck in ice: pods can't daze it.
+func critter_busy(cr: Arena.Critter) -> bool:
+	return _frozen.has(cr)
+
+
 func critter_hit(cr: Arena.Critter) -> bool:
 	if SPLIT_INTO.has(cr.kind):
 		_split(cr)

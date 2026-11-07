@@ -553,7 +553,7 @@ func _raise(c: Vector2i, d: Vector2i, home: bool) -> void:
 	if dominoes.has(c):
 		dm = dominoes[c]
 	else:
-		dm = {"home": home}
+		dm = {"home": home, "dir": d}
 		dominoes[c] = dm
 		_make_node(c, dm)
 	dm["dir"] = d

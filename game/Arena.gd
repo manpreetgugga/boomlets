@@ -50,6 +50,10 @@ const NOTICE_RANGE := Vector2(0.6, 1.0)
 const MISS_RANGE := Vector2(0.35, 0.15)
 ## Critters only see pods this close (tiles along the grid).
 const CRITTER_SIGHT: int = 3
+## The chance a critter is dazed by a pod it has just spotted: it stares at
+## it until it goes off (see _start_stare). Unlike the pairs above, this
+## eases off from world 1: (world 1, last world).
+const STARE_RANGE := Vector2(0.63, 0.25)
 ## Lives at the start of a level (one more with [member assist]).
 const START_LIVES: int = 4
 ## Seconds Pip cannot be hurt after coming back.
@@ -69,6 +73,10 @@ class Pod:
 	var slide_speed: float = 0.0
 	var kicked: bool = false
 	var age: float = 0.0
+	## Instance ids of the critters that have already spotted this pod (see
+	## _start_stare). Ids, so a dazed critter and its pod don't keep each
+	## other alive.
+	var seen: Dictionary = {}
 
 
 class Critter:
@@ -86,6 +94,11 @@ class Critter:
 	var think: float = 6.0
 	var phase: float = 0.0
 	var pos: Vector2
+	## The pod it stands staring at until it goes off (see _start_stare),
+	## or null.
+	var stare: Pod
+	## The "?" over its head while it stares (made the first time).
+	var mark: Label3D
 
 
 var world_id: int = 1
@@ -135,6 +148,7 @@ var critter_chase: int = int(CHASE_RANGE.x)
 var critter_notice: float = NOTICE_RANGE.x
 var critter_miss: float = MISS_RANGE.x
 var critter_sight: int = CRITTER_SIGHT
+var critter_stare: float = STARE_RANGE.x
 var max_pods: int = 1
 var fire: int = 2
 var speed: float = BASE_SPEED
@@ -212,12 +226,7 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	kit = Levels.make_kit(world)
 	kit.arena = self
 	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
-	var ramp: float = clampf(float(world - EASY_WORLDS) / float(Levels.WORLD_COUNT - EASY_WORLDS), 0.0, 1.0)
-	fuse = lerpf(FUSE_RANGE.x, FUSE_RANGE.y, ramp)
-	critter_pace = lerpf(PACE_RANGE.x, PACE_RANGE.y, ramp) * (0.85 if assist else 1.0)
-	critter_chase = roundi(lerpf(CHASE_RANGE.x, CHASE_RANGE.y, ramp))
-	critter_notice = lerpf(NOTICE_RANGE.x, NOTICE_RANGE.y, ramp)
-	critter_miss = lerpf(MISS_RANGE.x, MISS_RANGE.y, ramp)
+	tune_for(world)
 	lives = START_LIVES + (1 if assist else 0)
 	if not Models.palette_locked:
 		Models.use_palette(kit.palette())
@@ -270,6 +279,21 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	_update_camera(0.0, true)
 	camera.make_current()
 	rng.randomize()
+
+
+## Sets the fuse and critter settings for [param world]: gentlest up to
+## EASY_WORLDS, then a little harder each world up to the last (see the
+## *_RANGE constants), with [member assist] slowing critters on top. The
+## chance pods daze critters eases off from world 1 instead.
+func tune_for(world: int) -> void:
+	var ramp: float = clampf(float(world - EASY_WORLDS) / float(Levels.WORLD_COUNT - EASY_WORLDS), 0.0, 1.0)
+	fuse = lerpf(FUSE_RANGE.x, FUSE_RANGE.y, ramp)
+	critter_pace = lerpf(PACE_RANGE.x, PACE_RANGE.y, ramp) * (0.85 if assist else 1.0)
+	critter_chase = roundi(lerpf(CHASE_RANGE.x, CHASE_RANGE.y, ramp))
+	critter_notice = lerpf(NOTICE_RANGE.x, NOTICE_RANGE.y, ramp)
+	critter_miss = lerpf(MISS_RANGE.x, MISS_RANGE.y, ramp)
+	var from_first: float = clampf(float(world - 1) / float(Levels.WORLD_COUNT - 1), 0.0, 1.0)
+	critter_stare = lerpf(STARE_RANGE.x, STARE_RANGE.y, from_first)
 
 
 func set_input(primary: Vector2i, secondary: Vector2i) -> void:
@@ -1810,7 +1834,11 @@ func _update_critters(delta: float) -> void:
 			if cr.t >= 1.0:
 				cr.t = 1.0
 				cr.cell = cr.target
-		if cr.t >= 1.0:
+		# The stare ends when the pod goes off (or something else moves,
+		# freezes or puts the critter to sleep).
+		if cr.stare != null and (cr.t < 1.0 or not pods.has(cr.stare) or kit.critter_busy(cr)):
+			cr.stare = null
+		if cr.t >= 1.0 and cr.stare == null and not _start_stare(cr):
 			var nd: Vector2i = _choose_dir(cr)
 			if nd != Vector2i.ZERO:
 				cr.dir = nd
@@ -1879,6 +1907,46 @@ func _critter_danger(cr: Critter) -> Dictionary:
 	return out
 
 
+## Called as a critter reaches a tile: the first time it spots a pod (within
+## critter_sight) it may be dazed (chance critter_stare: about 6 in 10 in
+## world 1, a little less each world). It turns to face the pod and
+## stares at it until it goes off, neither chasing Pip nor getting out of
+## the way. Bosses and busy critters (kit.critter_busy: asleep, frozen)
+## never are. True when it has just started staring.
+func _start_stare(cr: Critter) -> bool:
+	if pods.is_empty() or demo or cr.kind == &"boss" or kit.critter_hidden(cr) or kit.critter_busy(cr):
+		return false
+	var id: int = cr.get_instance_id()
+	for p: Pod in pods:
+		var gap: Vector2i = p.cell - cr.cell
+		if p.seen.has(id) or gap == Vector2i.ZERO or absi(gap.x) + absi(gap.y) > critter_sight:
+			continue
+		p.seen[id] = true
+		if rng.randf() >= critter_stare:
+			continue
+		cr.stare = p
+		cr.dir = Vector2i(signi(gap.x), 0) if absi(gap.x) >= absi(gap.y) else Vector2i(0, signi(gap.y))
+		cr.node.scale = Vector3(0.85, 1.3, 0.85)
+		if cr.mark == null:
+			# Freed with the critter, but placed by _pose_critter (top level)
+			# so it stays above the critter on screen whichever way it faces.
+			cr.mark = Label3D.new()
+			cr.mark.top_level = true
+			cr.mark.text = "?"
+			cr.mark.font = Ui.font(900)
+			cr.mark.font_size = 100
+			cr.mark.pixel_size = 0.0065
+			cr.mark.modulate = Color.WHITE
+			cr.mark.outline_modulate = Color("#3B2A4A")
+			cr.mark.outline_size = 24
+			cr.mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			cr.mark.no_depth_test = true
+			cr.node.add_child(cr.mark)
+		cr.mark.visible = true
+		return true
+	return false
+
+
 ## The first step of the shortest walk from the critter to [param goal], or
 ## zero when there is none within 40 cells.
 func _path_step(cr: Critter, goal: Vector2i) -> Vector2i:
@@ -1938,6 +2006,8 @@ func _hit_critter(cr: Critter) -> void:
 
 func _kill_critter(cr: Critter) -> void:
 	critters.erase(cr)
+	if cr.mark != null:
+		cr.mark.visible = false
 	_fx.append({"node": cr.node, "t": 0.0, "life": 0.45, "kind": &"pop", "big": cr.kind == &"boss"})
 	_spawn_sparkles(_to3(cr.pos, 0.4), Models.BLOBBIT if cr.kind == &"blobbit" else Color("#FFF3B0"))
 	Sfx.play(&"pop")
@@ -1963,6 +2033,10 @@ func _pose_critter(cr: Critter, delta: float) -> void:
 	var body: Node3D = n.get_node("Body")
 	var t: float = _clock * 1.0 + cr.phase
 	n.scale = n.scale.lerp(Vector3.ONE, minf(delta * 8.0, 1.0))
+	if cr.mark != null:
+		cr.mark.visible = cr.stare != null and not kit.critter_hidden(cr)
+		if cr.mark.visible:
+			cr.mark.global_position = to_global(_to3(cr.pos, 1.2 + sin(_clock * 7.0) * 0.05) + Vector3(0.0, 0.0, -0.45))
 	var rest := Vector3.ONE
 	var kind: StringName = &"" if cr.custom else cr.kind
 	if cr.kind == &"boss":

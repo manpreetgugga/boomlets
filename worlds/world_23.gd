@@ -987,6 +987,11 @@ func critter_hidden(cr: Arena.Critter) -> bool:
 	return cr.kind == &"hedgehog" and float(_hog.get(cr, 0.0)) > 0.5
 
 
+## Curled up (or curling, or still uncurling): pods can't daze it.
+func critter_busy(cr: Arena.Critter) -> bool:
+	return _sleeping(cr) or float(_hog.get(cr, 0.0)) > 0.0
+
+
 func critter_step(cr: Arena.Critter) -> Vector2i:
 	if cr.kind != &"hedgehog" or season != 2 or arena.rng.randf() < 0.4:
 		return Vector2i.ZERO
