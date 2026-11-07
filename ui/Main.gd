@@ -31,6 +31,9 @@ var _fps_wait: float = 0.0
 ## Phones: the 3D scene's render scale, and how long the game has run slow.
 var _scale_3d: float = 1.0
 var _slow_for: float = 0.0
+## Losses in a row on each level ("world-level"); from the second, the next
+## try quietly gives Pip a helping hand (see Arena.assist).
+var _losses: Dictionary = {}
 
 ## Phones draw the 3D scene at this share of the screen's resolution (the
 ## interface stays sharp) and step down to MIN_SCALE_3D if they still cannot
@@ -559,6 +562,8 @@ func _start_level(n: int) -> void:
 	if arena != null:
 		arena.queue_free()
 	arena = Arena.new()
+	var tries_key: String = "%d-%d" % [world, level]
+	arena.assist = int(_losses.get(tries_key, 0)) >= 2
 	add_child(arena)
 	arena.setup(world, level, false)
 	hud = Hud.new()
@@ -572,8 +577,12 @@ func _start_level(n: int) -> void:
 	var l: int = level
 	var a: Arena = arena
 	Services.level_started(w, l)
-	arena.won.connect(func(stars: int, seconds: float) -> void: Services.level_won(w, l, stars, seconds, a.deaths))
-	arena.lost.connect(func(reason: String) -> void: Services.level_lost(w, l, reason, a.elapsed))
+	arena.won.connect(func(stars: int, seconds: float) -> void:
+		_losses.erase(tries_key)
+		Services.level_won(w, l, stars, seconds, a.deaths))
+	arena.lost.connect(func(reason: String) -> void:
+		_losses[tries_key] = int(_losses.get(tries_key, 0)) + 1
+		Services.level_lost(w, l, reason, a.elapsed))
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui.add_child(hud)
 

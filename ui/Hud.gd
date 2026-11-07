@@ -88,8 +88,16 @@ func tap(pos: Vector2) -> void:
 	var now: int = Time.get_ticks_msec()
 	if now - _last_tap_ms < DOUBLE_TAP_MS and pos.distance_to(_last_tap_pos) < DOUBLE_TAP_DIST:
 		_last_tap_ms = -100000
+		var pods_before: int = arena.pods_out
 		arena.drop_pod(_cell_before)
-		arena.set_walk_goal(_goal_before if _goal_before != Arena.NO_CELL else _cell_before)
+		if _goal_before != Arena.NO_CELL:
+			arena.set_walk_goal(_goal_before)
+		elif arena.pods_out > pods_before:
+			# Pip steps clear of his new pod on his own (see Arena's
+			# auto-dodge) and then stays put.
+			arena.set_walk_goal(Arena.NO_CELL)
+		else:
+			arena.set_walk_goal(_cell_before)
 		_ripples.append({"pos": pos, "t": 0.0, "pod": true})
 		return
 	_last_tap_ms = now

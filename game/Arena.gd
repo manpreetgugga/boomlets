@@ -19,9 +19,9 @@ const BELT_SPEED: float = 2.2
 const KICK_SPEED: float = 7.5
 const BARREL_FIRE: int = 3
 const BOSS_HP: int = 6
-const BASE_SPEED: float = 3.6
-const SPEED_STEP: float = 0.5
-const MAX_SPEED: float = 5.6
+const BASE_SPEED: float = 3.0
+const SPEED_STEP: float = 0.4
+const MAX_SPEED: float = 4.6
 const NO_CELL := Vector2i(-1, -1)
 ## Camera: horizontal field of view, and how steeply it looks down.
 const CAM_FOV: float = 34.0
@@ -31,12 +31,21 @@ const CAM_DIR := Vector3(0.0, 11.0, 5.0)
 const HUD_TOP: float = 170.0
 ## Seconds a cached tap-walk step stays good when nothing else changed (catches
 ## walls that open and shut on their own).
-const WALK_REFRESH: float = 0.15
+const WALK_REFRESH: float = 0.25
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1, &"boss": 1.0}
 ## Every critter (and boss) walks at this share of its listed speed: a
 ## gentler pace so levels stay a challenge without feeling unfair.
 const CRITTER_PACE: float = 0.85
+## Worlds up to this one are the gentle start: slower critters, buzzers that
+## only notice Pip close by, and a longer fuse.
+const EASY_WORLDS: int = 5
+const EASY_PACE: float = 0.75
+const EASY_FUSE: float = 3.0
+## Lives at the start of a level (one more with [member assist]).
+const START_LIVES: int = 4
+## Seconds Pip cannot be hurt after coming back.
+const RESPAWN_GRACE: float = 3.0
 ## How close a critter's centre must come to Pip's to hurt him, in tiles.
 const CRITTER_REACH: float = 0.55
 const BOSS_REACH: float = 0.9
@@ -107,7 +116,13 @@ var hero_pass: Array[Pod] = []
 var hero_warped: bool = false
 var hero_moving: bool = false
 var hero_yaw: float = 0.0
-var lives: int = 3
+var lives: int = START_LIVES
+## Set before setup() after the player lost this level twice in a row: one
+## more life and slower critters, quietly.
+var assist: bool = false
+## This level's fuse and critter pace (see EASY_WORLDS and assist).
+var fuse: float = FUSE
+var critter_pace: float = CRITTER_PACE
 var max_pods: int = 1
 var fire: int = 2
 var speed: float = BASE_SPEED
@@ -119,6 +134,8 @@ var walk_goal: Vector2i = NO_CELL
 var _walk_key: Array = []
 var _walk_dir: Vector2i = Vector2i.ZERO
 var _walk_age: float = 0.0
+## Counts down while Pip shakes his head at a pod he would not escape.
+var _refuse_t: float = 0.0
 var shield: bool = false
 var pods_out: int = 0
 var deaths: int = 0
@@ -141,6 +158,12 @@ var _dying_t: float = 0.0
 var _won_t: float = 0.0
 var _danger: Dictionary = {}
 var _danger_frame: int = -1
+var _hero_danger_cache: Dictionary = {}
+var _hero_danger_frame: int = -1
+var _crit_cache: Dictionary = {}
+var _crit_frame: int = -1
+## Soft red tiles under every blast line while a pod ticks.
+var _blast_mm: MultiMeshInstance3D
 var rng := RandomNumberGenerator.new()
 
 var _crates_mm: MultiMesh
@@ -177,6 +200,10 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	kit = Levels.make_kit(world)
 	kit.arena = self
 	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
+	var easy: bool = world <= EASY_WORLDS
+	fuse = EASY_FUSE if easy else FUSE
+	critter_pace = (EASY_PACE if easy else CRITTER_PACE) * (0.85 if assist else 1.0)
+	lives = START_LIVES + (1 if assist else 0)
 	if not Models.palette_locked:
 		Models.use_palette(kit.palette())
 	if not demo_mode:
@@ -216,6 +243,7 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 		_marker = Models.walk_marker()
 		_marker.visible = false
 		add_child(_marker)
+		_build_blast_zone()
 	kit.build_extra()
 	camera = Camera3D.new()
 	camera.keep_aspect = Camera3D.KEEP_WIDTH
@@ -753,6 +781,7 @@ func _process(delta: float) -> void:
 			_lose("Time's up!")
 	_update_hero(delta)
 	_update_pods(delta)
+	_update_blast_zone()
 	_update_flames(delta)
 	_update_critters(delta)
 	kit.process(delta)
@@ -760,6 +789,81 @@ func _process(delta: float) -> void:
 	_update_fx(delta)
 	_animate_scenery(delta)
 	_update_camera(delta, false)
+
+
+## The red tiles that show where ticking pods will blast: a bright rounded
+## frame round a see-through fill, so they read as "danger" on any ground.
+func _build_blast_zone() -> void:
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(0.94, 0.94)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.vertex_color_use_as_albedo = true
+	m.albedo_color = Color.WHITE
+	m.albedo_texture = _blast_texture()
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	m.no_depth_test = false
+	quad.material = m
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = quad
+	mm.instance_count = W * H
+	mm.visible_instance_count = 0
+	_blast_mm = MultiMeshInstance3D.new()
+	_blast_mm.multimesh = mm
+	_blast_mm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_blast_mm)
+
+
+static var _blast_tex: ImageTexture
+
+
+## A white rounded square: solid frame, half see-through middle. Tinted red
+## per tile; made once per run.
+static func _blast_texture() -> ImageTexture:
+	if _blast_tex != null:
+		return _blast_tex
+	var n: int = 64
+	var half: float = n * 0.5
+	var r: float = 12.0
+	var frame: float = 7.0
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in n:
+		for x in n:
+			var q := Vector2(absf(x + 0.5 - half), absf(y + 0.5 - half)) - Vector2(half - 1.0 - r, half - 1.0 - r)
+			var d: float = Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - r
+			var a: float = lerpf(0.55, 1.0, clampf(d + frame + 0.5, 0.0, 1.0)) * clampf(-d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	img.generate_mipmaps()
+	_blast_tex = ImageTexture.create_from_image(img)
+	return _blast_tex
+
+
+## Lights the tiles each ticking pod will blast, redder as its fuse runs out.
+func _update_blast_zone() -> void:
+	if _blast_mm == null:
+		return
+	var mm: MultiMesh = _blast_mm.multimesh
+	if pods.is_empty():
+		mm.visible_instance_count = 0
+		return
+	var heat: Dictionary = {}
+	for p: Pod in pods:
+		var cells: Dictionary = {}
+		_add_blast_cells(p.cell, p.fire, cells)
+		var hurry: float = clampf(1.0 - p.timer / fuse, 0.0, 1.0)
+		for c: Vector2i in cells:
+			heat[c] = maxf(float(heat.get(c, 0.0)), hurry)
+	var i: int = 0
+	var pulse: float = 0.5 + 0.5 * sin(_clock * 9.0)
+	for c: Vector2i in heat:
+		var h: float = heat[c]
+		mm.set_instance_transform(i, Transform3D(Basis(), Vector3(c.x, 0.03, c.y)))
+		mm.set_instance_color(i, Color(1.0, 0.1, 0.08, minf(0.66 + h * 0.26 + h * pulse * 0.16, 1.0)))
+		i += 1
+	mm.visible_instance_count = i
 
 
 func _update_hero(delta: float) -> void:
@@ -796,6 +900,19 @@ func _update_hero(delta: float) -> void:
 	var moved_dir := Vector2i.ZERO
 	var want: Vector2i = input_primary
 	var want2: Vector2i = input_secondary
+	if want == Vector2i.ZERO and walk_goal == NO_CELL and not demo and _hero_danger().has(hero_cell()):
+		# Standing where a blast will reach (say on a pod he just dropped):
+		# Pip steps to the nearest safe tile on his own.
+		var spot: Vector2i = _safe_spot()
+		if spot != NO_CELL and spot != hero_cell():
+			walk_goal = spot
+			_marker_t = 0.0
+	elif want == Vector2i.ZERO and walk_goal == NO_CELL and not demo and hero_invuln <= 0.0 and _threatened():
+		# A critter coming at him while he stands still: Pip sidesteps.
+		var away: Vector2i = _escape_spot()
+		if away != NO_CELL and away != hero_cell():
+			walk_goal = away
+			_marker_t = 0.0
 	if want == Vector2i.ZERO and walk_goal != NO_CELL:
 		var settle: Vector2i = _settle_cell()
 		if settle != NO_CELL:
@@ -856,6 +973,10 @@ func _pose_hero(delta: float) -> void:
 	hero.position = _to3(hero_pos)
 	hero.rotation.y = lerp_angle(hero.rotation.y, hero_yaw, minf(delta * 14.0, 1.0))
 	var body: Node3D = hero.get_node("Body")
+	if _refuse_t > 0.0:
+		# A quick head shake: "no way out of that one".
+		_refuse_t = maxf(_refuse_t - delta, 0.0)
+		body.rotation.y = sin(_refuse_t * 50.0) * 0.45 * (_refuse_t / 0.35)
 	var foot_l: Node3D = body.get_node("FootL")
 	var foot_r: Node3D = body.get_node("FootR")
 	if hero_moving:
@@ -894,25 +1015,188 @@ func _settle_cell() -> Vector2i:
 ## blocks, pods and live flames, through warps. Zero means wait (the way is
 ## shut for now, say by a flame).
 func _walk_step() -> Vector2i:
-	var key: Array = [hero_cell(), walk_goal, can_kick, flames.size(), pod_at.keys(), hero_pass.size()]
+	var danger: Dictionary = _hero_danger()
+	var crit: Dictionary = _critter_cells()
+	var key: Array = [hero_cell(), walk_goal, can_kick, flames.size(), pod_at.keys(), hero_pass.size(), crit.keys(), danger.size()]
 	_walk_age += get_process_delta_time()
 	if key == _walk_key and _walk_age < WALK_REFRESH:
 		return _walk_dir
 	_walk_key = key
 	_walk_age = 0.0
-	var first: Dictionary = _hero_search(true, false, walk_goal)["first"]
-	if not first.has(walk_goal) and can_kick:
-		first = _hero_search(true, true, walk_goal)["first"]
-	_walk_dir = first.get(walk_goal, Vector2i.ZERO)
+	_walk_dir = _plan_step(danger, crit)
 	return _walk_dir
+
+
+## Pip's next step toward [member walk_goal], thinking ahead: a way round
+## critters and blast lines first, then one round blast lines only. With no
+## safe way he gets as close as is safe and waits there for the blast; when
+## he already stands in a blast line he gets out of it first.
+func _plan_step(danger: Dictionary, crit: Dictionary) -> Vector2i:
+	var here: Vector2i = hero_cell()
+	# The search round blast lines only, without kicking: when it cannot
+	# reach the goal it has covered every safe tile, so it is kept for the
+	# fallback below instead of searching again.
+	var safe_r: Dictionary = {}
+	if not danger.has(walk_goal):
+		var both: Dictionary = danger.merged(crit)
+		var passes: Array = [[both, false], [both, true], [danger, false], [danger, true]]
+		for i in passes.size():
+			var kick: bool = passes[i][1]
+			if (kick and not can_kick) or (i < 2 and crit.is_empty()):
+				continue
+			var r: Dictionary = _hero_search(true, kick, walk_goal, passes[i][0])
+			if i == 2:
+				safe_r = r
+			var first: Dictionary = r["first"]
+			if not first.has(walk_goal):
+				continue
+			var step: Vector2i = first[walk_goal]
+			# A critter in the way: back off rather than walk into it.
+			if crit.has(here + step) and not danger.has(here):
+				var away: Vector2i = _escape_spot()
+				if away != NO_CELL and away != here:
+					return _hero_search(true, false, away)["first"].get(away, Vector2i.ZERO)
+				return Vector2i.ZERO
+			return step
+	# No safe way to the goal: the safe tile closest to it instead.
+	if safe_r.is_empty():
+		safe_r = _hero_search(true, false, NO_CELL, danger)
+	var first2: Dictionary = safe_r["first"]
+	var dist: Dictionary = safe_r["dist"]
+	var best: Vector2i = NO_CELL
+	var best_score: int = 1 << 30
+	for c: Vector2i in dist:
+		if danger.has(c):
+			continue
+		var score: int = (absi(c.x - walk_goal.x) + absi(c.y - walk_goal.y)) * 1000 + int(dist[c])
+		if score < best_score:
+			best_score = score
+			best = c
+	if best != NO_CELL:
+		return Vector2i.ZERO if best == here else first2[best]
+	if danger.has(here):
+		var spot: Vector2i = _safe_spot()
+		if spot != NO_CELL and spot != here:
+			return _hero_search(true, false, spot)["first"].get(spot, Vector2i.ZERO)
+	# Nowhere safe either: walk on, the old way.
+	var plain: Dictionary = _hero_search(true, false, walk_goal)["first"]
+	if not plain.has(walk_goal) and can_kick:
+		plain = _hero_search(true, true, walk_goal)["first"]
+	return plain.get(walk_goal, Vector2i.ZERO)
+
+
+## Whether a critter is close and coming toward Pip.
+func _threatened() -> bool:
+	for cr: Critter in critters:
+		if kit.critter_hidden(cr):
+			continue
+		var d: float = cr.pos.distance_to(hero_pos)
+		if d < 1.25 or (d < 2.2 and Vector2(cr.target).distance_to(hero_pos) < d - 0.1):
+			return true
+	return false
+
+
+## A tile a few steps away, clear of blasts and critters' paths, as far from
+## the critters as it can be; NO_CELL when there is none.
+func _escape_spot() -> Vector2i:
+	var avoid: Dictionary = _hero_danger().merged(_critter_cells())
+	var dist: Dictionary = _hero_search(true, false, NO_CELL, avoid)["dist"]
+	var best: Vector2i = NO_CELL
+	var best_score: float = -1e9
+	for c: Vector2i in dist:
+		var steps: int = int(dist[c])
+		if steps > 5:
+			continue
+		var gap: float = 99.0
+		for cr: Critter in critters:
+			if not kit.critter_hidden(cr):
+				gap = minf(gap, cr.pos.distance_to(Vector2(c)))
+		var score: float = minf(gap, 4.0) - steps * 0.2
+		if score > best_score:
+			best_score = score
+			best = c
+	return best
+
+
+## The nearest tile no blast will reach that Pip can walk to now, keeping
+## clear of critters when he can; NO_CELL when there is none.
+func _safe_spot() -> Vector2i:
+	var danger: Dictionary = _hero_danger()
+	var crit: Dictionary = _critter_cells()
+	for avoid: Dictionary in [crit, {}]:
+		var dist: Dictionary = _hero_search(true, false, NO_CELL, avoid)["dist"]
+		var best: Vector2i = NO_CELL
+		var best_d: int = 1 << 30
+		for c: Vector2i in dist:
+			if danger.has(c) or crit.has(c):
+				continue
+			var d: int = int(dist[c])
+			if d < best_d:
+				best_d = d
+				best = c
+		if best != NO_CELL:
+			return best
+	return NO_CELL
+
+
+## Every tile a flame is on or a pod's blast will reach, whatever its fuse
+## (Pip plans ahead; critters only fear pods about to go, see _danger_cells).
+func _hero_danger() -> Dictionary:
+	var frame: int = Engine.get_process_frames()
+	if frame == _hero_danger_frame:
+		return _hero_danger_cache
+	_hero_danger_frame = frame
+	var out: Dictionary = {}
+	for c: Vector2i in flames:
+		out[c] = true
+	for p: Pod in pods:
+		_add_blast_cells(p.cell, p.fire, out)
+	_hero_danger_cache = out
+	return out
+
+
+## Adds the tiles a blast at [param c] with reach [param reach] covers.
+func _add_blast_cells(c: Vector2i, reach: int, out: Dictionary) -> void:
+	out[c] = true
+	for d: Vector2i in DIRS:
+		for i in range(1, reach + 1):
+			var cc: Vector2i = c + d * i
+			if tile(cc) != FLOOR:
+				break
+			var own: int = kit.flame_stop(cc)
+			if own == 2:
+				break
+			out[cc] = true
+			if own == 1 or pod_at.has(cc):
+				break
+
+
+## The tiles critters stand on, are stepping onto and will step onto next.
+func _critter_cells() -> Dictionary:
+	var frame: int = Engine.get_process_frames()
+	if frame == _crit_frame:
+		return _crit_cache
+	_crit_frame = frame
+	var out: Dictionary = {}
+	for cr: Critter in critters:
+		if kit.critter_hidden(cr):
+			continue
+		out[cr.cell] = true
+		out[cr.target] = true
+		var ahead: Vector2i = cr.target + cr.dir
+		if tile(ahead) == FLOOR:
+			out[ahead] = true
+	_crit_cache = out
+	return out
 
 
 ## Breadth-first search from Pip's tile over the tiles he can walk. Gives
 ## {"first": {tile: first step}, "dist": {tile: steps}}. Stepping on a warp
 ## lands on its partner. [param strict] also avoids live flames and pods
 ## (unless [param through_pods], for kicking them out of the way). With a
-## [param goal], stops as soon as that tile is reached.
-func _hero_search(strict: bool, through_pods: bool, goal: Vector2i = NO_CELL) -> Dictionary:
+## [param goal], stops as soon as that tile is reached. Tiles in
+## [param avoid] are never stepped on.
+func _hero_search(strict: bool, through_pods: bool, goal: Vector2i = NO_CELL, avoid: Dictionary = {}) -> Dictionary:
 	var start: Vector2i = hero_cell()
 	var first: Dictionary = {start: Vector2i.ZERO}
 	var dist: Dictionary = {start: 0}
@@ -923,7 +1207,7 @@ func _hero_search(strict: bool, through_pods: bool, goal: Vector2i = NO_CELL) ->
 		head += 1
 		for d: Vector2i in DIRS:
 			var n: Vector2i = c + d
-			if first.has(n) or not _hero_can_walk(n, strict, through_pods):
+			if first.has(n) or avoid.has(n) or not _hero_can_walk(n, strict, through_pods):
 				continue
 			var step: Vector2i = d if c == start else first[c]
 			first[n] = step
@@ -1011,7 +1295,7 @@ func _move_axis(pos: Vector2, dir: Vector2i, dist: float, blocked: Callable) -> 
 func _respawn() -> void:
 	hero_pos = Vector2(start_cell)
 	hero_alive = true
-	hero_invuln = 2.5
+	hero_invuln = RESPAWN_GRACE
 	hero_pass.clear()
 	walk_goal = NO_CELL
 	state = &"play"
@@ -1080,7 +1364,14 @@ func drop_pod(at: Vector2i = NO_CELL) -> void:
 		c = at
 	if pods_out >= max_pods or pod_at.has(c) or tile(c) != FLOOR or warps.has(c):
 		return
+	if not shield and hero_invuln < fuse and not _can_escape(c):
+		# No way out of this blast in time: Pip shakes his head instead.
+		_refuse_t = 0.35
+		Sfx.play(&"fail", 0.0)
+		Save.buzz(25)
+		return
 	var p := Pod.new()
+	p.timer = fuse
 	p.cell = c
 	p.pos = Vector2(c)
 	p.fire = fire
@@ -1095,6 +1386,19 @@ func drop_pod(at: Vector2i = NO_CELL) -> void:
 	Save.buzz(15)
 	var body: Node3D = hero.get_node("Body")
 	body.scale = Vector3(1.25, 0.75, 1.25)
+
+
+## Whether Pip could still reach a tile no blast reaches, in time, after
+## dropping a pod at [param c].
+func _can_escape(c: Vector2i) -> bool:
+	var danger: Dictionary = _hero_danger().duplicate()
+	_add_blast_cells(c, fire, danger)
+	var dist: Dictionary = _hero_search(true, false)["dist"]
+	var steps_in_time: float = (fuse - 0.35) * speed
+	for t: Vector2i in dist:
+		if t != c and not danger.has(t) and float(dist[t]) <= steps_in_time:
+			return true
+	return false
 
 
 func _pod_blocked(c: Vector2i) -> bool:
@@ -1142,7 +1446,7 @@ func _update_pods(delta: float) -> void:
 					p.slide = keep
 		p.node.position = _to3(p.pos)
 		var body: Node3D = p.node.get_node("Body")
-		var hurry: float = clampf(1.0 - p.timer / FUSE, 0.0, 1.0)
+		var hurry: float = clampf(1.0 - p.timer / fuse, 0.0, 1.0)
 		var pulse: float = 1.0 + sin(p.age * (6.0 + hurry * 18.0)) * (0.04 + hurry * 0.06)
 		body.scale = body.scale.lerp(Vector3(pulse, 2.0 - pulse, pulse), minf(delta * 14.0, 1.0)) if p.age > 0.2 else Vector3.ONE.lerp(Vector3(1.4, 0.5, 1.4), 1.0 - p.age / 0.2)
 		var spark: MeshInstance3D = body.get_node("Spark")
@@ -1424,7 +1728,7 @@ func _collect(c: Vector2i) -> void:
 		&"shield":
 			shield = true
 		&"heart":
-			lives = mini(lives + 1, 5)
+			lives = mini(lives + 1, 6)
 	(pk["node"] as Node3D).queue_free()
 	_spawn_sparkles(Vector3(c.x, 0.5, c.y), Color("#FFF3B0"))
 	Sfx.play(&"pickup", 0.0)
@@ -1456,7 +1760,7 @@ func _update_critters(delta: float) -> void:
 				cr.target = back
 				cr.t = 1.0 - cr.t
 				cr.dir = -cr.dir
-			cr.t += cr.speed * CRITTER_PACE * delta
+			cr.t += cr.speed * critter_pace * delta
 			if cr.t >= 1.0:
 				cr.t = 1.0
 				cr.cell = cr.target
@@ -1502,7 +1806,7 @@ func _choose_dir(cr: Critter) -> Vector2i:
 		var safe: Array = open.filter(func(d: Vector2i) -> bool: return not danger.has(cr.cell + d))
 		if not safe.is_empty():
 			open = safe
-		var chase_range: int = 99 if cr.kind == &"boss" else 7
+		var chase_range: int = 99 if cr.kind == &"boss" else (4 if world_id <= EASY_WORLDS else 7)
 		if not demo and hero_alive and absi(hc.x - cr.cell.x) + absi(hc.y - cr.cell.y) <= chase_range:
 			var step: Vector2i = _path_step(cr, hc)
 			if step != Vector2i.ZERO and open.has(step):
