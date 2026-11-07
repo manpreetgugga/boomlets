@@ -24,6 +24,8 @@ const RETRY_SECONDS: Array[float] = [10.0, 30.0, 60.0, 120.0]
 
 var ads_ok: bool = false
 var _started: bool = false
+## True once MobileAds.initialize has finished; no ad is requested before.
+var _sdk_ready: bool = false
 var _rewarded: RewardedAd = null
 var _interstitial: InterstitialAd = null
 var _loading: Dictionary = {}
@@ -62,9 +64,14 @@ func _finish_consent() -> void:
 		var config := RequestConfiguration.new()
 		config.max_ad_content_rating = RequestConfiguration.MAX_AD_CONTENT_RATING_PG
 		MobileAds.set_request_configuration(config)
-		MobileAds.initialize()
-		_load("rewarded")
-		_load("interstitial")
+		# Ads load only once the SDK says it is ready: the Next-Gen SDK throws
+		# (and kills the app) if an ad is requested while it is still starting.
+		var on_ready := OnInitializationCompleteListener.new()
+		on_ready.on_initialization_complete = func(_status: InitializationStatus) -> void:
+			_sdk_ready = true
+			_load("rewarded")
+			_load("interstitial")
+		MobileAds.initialize(on_ready)
 
 
 ## In regions that need consent, the form saves the player's choices as an
@@ -104,7 +111,7 @@ func _unit(kind: String) -> String:
 
 
 func _load(kind: String) -> void:
-	if not ads_ok or _loading.get(kind, false):
+	if not ads_ok or not _sdk_ready or _loading.get(kind, false):
 		return
 	_loading[kind] = true
 	if kind == "rewarded":
