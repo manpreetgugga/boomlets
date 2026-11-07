@@ -11,7 +11,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.Log;
 
@@ -32,6 +33,13 @@ final class Reminders {
     static final String EXTRA_TITLE = "title";
     static final String EXTRA_BODY = "body";
     static final String EXTRA_SLOT = "slot";
+    /** When the reminder was due (epoch ms). */
+    static final String EXTRA_AT = "at";
+    /**
+     * A reminder held back longer than this (a phone dozing on its charger can
+     * hold an alarm for hours) is dropped rather than posted at 2 AM.
+     */
+    static final long MAX_LATE_MS = 90 * 60_000L;
     /** Put on the intent that opens the game from a reminder: which slot it was. */
     static final String EXTRA_OPENED = "boomlets_reminder_slot";
 
@@ -117,6 +125,7 @@ final class Reminders {
                 continue;
             }
             Intent fire = fireIntent(ctx)
+                    .putExtra(EXTRA_AT, s.optLong("at"))
                     .putExtra(EXTRA_SLOT, s.optString(EXTRA_SLOT))
                     .putExtra(EXTRA_TITLE, s.optString(EXTRA_TITLE))
                     .putExtra(EXTRA_BODY, s.optString(EXTRA_BODY));
@@ -124,7 +133,7 @@ final class Reminders {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             // Inexact on purpose (no exact-alarm permission): within 15 minutes
             // of its time (plain inexact alarms may drift an hour), or, on a
-            // phone left idle, as soon as it wakes.
+            // phone left idle, when it next wakes (too late: see MAX_LATE_MS).
             am.setWindow(AlarmManager.RTC_WAKEUP, s.optLong("at"), WINDOW_MS, pi);
         }
         for (int i = plan.length(); i < before; i++) {
@@ -208,7 +217,7 @@ final class Reminders {
                 .setContentIntent(tap)
                 .setAutoCancel(true)
                 .setShowWhen(true);
-        Bitmap face = BitmapFactory.decodeResource(ctx.getResources(), ctx.getApplicationInfo().icon);
+        Bitmap face = appIcon(ctx);
         if (face != null) {
             b.setLargeIcon(face);
         }
@@ -216,6 +225,27 @@ final class Reminders {
             nm.notify(NOTIFICATION_ID, b.build());
         } catch (SecurityException ex) {
             Log.w(TAG, "Not allowed to post a reminder", ex);
+        }
+    }
+
+    /**
+     * The game's icon as a picture. (The icon is an adaptive one, an XML
+     * drawable, which BitmapFactory cannot read, so it is drawn instead.)
+     */
+    private static Bitmap appIcon(Context ctx) {
+        try {
+            Drawable d = ctx.getPackageManager().getApplicationIcon(ctx.getApplicationInfo());
+            int size = ctx.getResources().getDimensionPixelSize(android.R.dimen.notification_large_icon_width);
+            if (size <= 0) {
+                size = 128;
+            }
+            Bitmap bm = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            d.setBounds(0, 0, size, size);
+            d.draw(new Canvas(bm));
+            return bm;
+        } catch (RuntimeException ex) {
+            Log.w(TAG, "No icon for the reminder", ex);
+            return null;
         }
     }
 
