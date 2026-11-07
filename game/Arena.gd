@@ -39,7 +39,7 @@ const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1
 ## second and the worlds between step smoothly from one to the other.
 const EASY_WORLDS: int = 5
 ## Seconds a pod takes to go off.
-const FUSE_RANGE := Vector2(3.0, 2.7)
+const FUSE_RANGE := Vector2(2.4, 2.1)
 ## Share of its listed speed every critter (and boss) walks at.
 const PACE_RANGE := Vector2(0.68, 0.78)
 ## How close Pip must be (tiles along the grid) before a buzzer chases him.
@@ -1517,6 +1517,7 @@ func _update_pods(delta: float) -> void:
 		body.scale = body.scale.lerp(Vector3(pulse, 2.0 - pulse, pulse), minf(delta * 14.0, 1.0)) if p.age > 0.2 else Vector3.ONE.lerp(Vector3(1.4, 0.5, 1.4), 1.0 - p.age / 0.2)
 		var spark: MeshInstance3D = body.get_node("Spark")
 		spark.scale = Vector3.ONE * (0.7 + randf() * 0.7)
+		Models.heat_pod(p.node, hurry, p.age)
 		if p.timer <= 0.0:
 			_explode(p)
 

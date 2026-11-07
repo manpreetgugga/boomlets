@@ -23,6 +23,7 @@ static var HERO: Color = Color("#5CC8B4")
 static var HERO_BELLY: Color = Color("#FFF1D6")
 static var LEAF: Color = Color("#6CBF5A")
 static var POD: Color = Color("#3B3A5C")
+static var POD_HOT: Color = Color("#F2462E")       # a pod about to go off
 static var FLAME: Color = Color("#FF8A3D")
 static var FLAME_CORE: Color = Color("#FFD45C")
 static var BLOBBIT: Color = Color("#F28DB2")
@@ -244,7 +245,10 @@ static func pod() -> Node3D:
 	var body := Node3D.new()
 	body.name = "Body"
 	root.add_child(body)
-	part(body, sphere(0.3, 0.6, 22), POD, Vector3(0, 0.32, 0))
+	var shell := part(body, sphere(0.3, 0.6, 22), POD, Vector3(0, 0.32, 0))
+	# Its own material, so it can heat up as its fuse runs out (see heat_pod).
+	shell.material_override = shell.material_override.duplicate()
+	shell.name = "Shell"
 	var band := part(body, cylinder(0.305, 0.305, 0.07, 22), Color("#FFE9C4"), Vector3(0, 0.32, 0))
 	band.name = "Band"
 	part(body, cylinder(0.07, 0.09, 0.08, 10), Color("#6E6C8E"), Vector3(0, 0.63, 0))
@@ -253,6 +257,20 @@ static func pod() -> Node3D:
 	var spark := part(body, sphere(0.06, -1, 8), FLAME_CORE, Vector3(0.06, 0.8, 0), 2.5)
 	spark.name = "Spark"
 	return root
+
+
+## Heats up a pod from [method pod] as its fuse runs out ([param hurry] goes
+## from 0 to 1): its shell turns from its own colour to glowing red, then
+## flashes in the last moments before it goes off.
+static func heat_pod(node: Node3D, hurry: float, age: float) -> void:
+	var shell := node.get_node_or_null("Body/Shell") as MeshInstance3D
+	if shell == null:
+		return
+	var heat: float = smoothstep(0.15, 0.8, hurry)
+	var flash: float = smoothstep(0.7, 1.0, hurry) * (0.5 + 0.5 * sin(age * 30.0))
+	var m := shell.material_override as ShaderMaterial
+	m.set_shader_parameter(&"albedo", POD.lerp(POD_HOT, heat).lerp(FLAME_CORE, flash * 0.75))
+	m.set_shader_parameter(&"glow", heat * 0.4 + flash * 0.5)
 
 
 ## Blobbit: a wobbly pink jelly dome. Wanders.
