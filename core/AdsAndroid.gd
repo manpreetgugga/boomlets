@@ -6,8 +6,9 @@ extends Node
 
 ## The consent check is done. [param ads_ok]: ads may be requested.
 ## [param stats_ok]: the player agreed to analytics (or no consent is needed
-## where they are).
-signal consent_done(ads_ok: bool, stats_ok: bool)
+## where they are). [param known]: Google's check actually answered (false
+## when it has never reached Google, e.g. a first launch offline).
+signal consent_done(ads_ok: bool, stats_ok: bool, known: bool)
 signal rewarded_changed
 
 const APP_UNITS := {
@@ -55,7 +56,7 @@ func _finish_consent() -> void:
 	var status: int = UserMessagingPlatform.consent_information.get_consent_status()
 	ads_ok = status != ConsentInformation.ConsentStatus.REQUIRED
 	var stats_ok: bool = status == ConsentInformation.ConsentStatus.NOT_REQUIRED or _tcf_allows_analytics()
-	consent_done.emit(ads_ok, stats_ok)
+	consent_done.emit(ads_ok, stats_ok, status != ConsentInformation.ConsentStatus.UNKNOWN)
 	if ads_ok and not _started:
 		_started = true
 		var config := RequestConfiguration.new()

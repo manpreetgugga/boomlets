@@ -8,6 +8,8 @@ extends Node
 ## denied (set in the exported manifest). It is switched on only when the
 ## player is somewhere no consent is needed, or agreed in Google's consent
 ## form, and they have not turned "Share play stats" off in Privacy.
+## Crash reports (Crashlytics) are on from the first launch, then follow the
+## same consent once it is known, and have their own switch in Privacy.
 
 const PRIVACY_URL: String = "https://manpreetgugga.github.io/boomlets/privacy.html"
 
@@ -30,6 +32,10 @@ var _ads: Node = null
 var _analytics: Object = null
 var _analytics_ready: bool = false
 var _consent_stats: bool = false
+var _crash: Object = null
+var _crash_ready: bool = false
+## False until Google's consent check has answered for this launch.
+var _consent_known: bool = false
 var _levels_since_break: int = 0
 var _last_full_ad_ms: int = -1000000
 
@@ -57,15 +63,27 @@ func _start_firebase() -> void:
 	_analytics.connect("analytics_initialized", func(ok: bool) -> void:
 		_analytics_ready = ok
 		_apply_stats())
+	if Engine.has_singleton("GodotxFirebaseCrashlytics"):
+		_crash = Engine.get_singleton("GodotxFirebaseCrashlytics")
+		_crash.connect("crashlytics_initialized", func(ok: bool) -> void:
+			_crash_ready = ok
+			if ok:
+				_tag_crash_reports()
+			_apply_crash()
+			_maybe_test_crash())
 	core.connect("core_initialized", func(ok: bool) -> void:
 		if ok:
-			_analytics.initialize())
+			_analytics.initialize()
+			if _crash != null:
+				_crash.initialize())
 	core.initialize()
 
 
-func _on_consent_done(_ads_ok: bool, stats_ok: bool) -> void:
+func _on_consent_done(_ads_ok: bool, stats_ok: bool, known: bool) -> void:
 	_consent_stats = stats_ok
+	_consent_known = known
 	_apply_stats()
+	_apply_crash()
 
 
 ## Turns Firebase collection on or off to match consent and the player's
@@ -100,7 +118,67 @@ func set_stats_on(on: bool) -> void:
 	_apply_stats()
 
 
+# --- Crash reports -----------------------------------------------------------
+# Crashlytics is on from the very first launch (nothing in the manifest holds
+# it), so a crash at start-up, before any script runs, is still reported.
+# Once Google's consent check answers, crash reports follow the same consent
+# as play stats; the player's "Crash reports" switch can always turn them off.
+# The SDK remembers the last setting, so a "no" also covers the next start-up.
+
+func _apply_crash() -> void:
+	if not _crash_ready:
+		return
+	_crash.set_crashlytics_collection_enabled(crash_reports_allowed())
+
+
+func crash_reports_allowed() -> bool:
+	return Save.crash_reports_on and (not _consent_known or _consent_stats)
+
+
+func set_crash_reports_on(on: bool) -> void:
+	Save.crash_reports_on = on
+	Save.write()
+	_apply_crash()
+
+
+## Facts that help sort crashes by device: the GPU and its driver above all.
+func _tag_crash_reports() -> void:
+	var tags: Dictionary = {
+		"gpu": RenderingServer.get_video_adapter_name(),
+		"gpu_vendor": RenderingServer.get_video_adapter_vendor(),
+		"gpu_api": RenderingServer.get_video_adapter_api_version(),
+		"renderer": str(ProjectSettings.get_setting("rendering/renderer/rendering_method.mobile", "mobile")),
+		"game_version": str(ProjectSettings.get_setting("application/config/version", "")),
+	}
+	for k: String in tags:
+		_crash.set_custom_value_string(k, str(tags[k]))
+
+
+## Debug builds only: a native crash on purpose, to check that crash reports
+## reach Firebase. Create the file with
+## adb shell run-as com.manpreetgugga.boomlets touch files/crash_test
+## then start the game; the report is sent on the next start. (The plugin's
+## own crash() is no use here: Godot catches exceptions from plugin calls.)
+## On an x86_64 emulator, test with an x86_64 build: under ARM translation
+## the native crash is caught but its report is never written.
+func _maybe_test_crash() -> void:
+	const FLAG: String = "user://crash_test"
+	if not OS.is_debug_build() or not FileAccess.file_exists(FLAG):
+		return
+	DirAccess.remove_absolute(FLAG)
+	crash_note("test crash requested")
+	await get_tree().create_timer(2.0).timeout
+	OS.crash("Boomlets test crash (debug build)")
+
+
+## A short trail of what the player did, attached to the next crash report.
+func crash_note(text: String) -> void:
+	if _crash_ready:
+		_crash.log_message(text)
+
+
 func level_started(world: int, level: int) -> void:
+	crash_note("level_start %d-%d" % [world, level])
 	event("level_start", {"level_name": "%d-%d" % [world, level], "world": world, "level": level})
 
 

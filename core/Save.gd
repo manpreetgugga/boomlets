@@ -12,6 +12,8 @@ var sound_on: bool = true
 var haptics_on: bool = true
 ## The player's own switch for anonymous play stats (Privacy card).
 var stats_on: bool = true
+## The player's own switch for crash reports (Privacy card). On by default.
+var crash_reports_on: bool = true
 ## The world played last; the menu's Play button opens its map.
 var last_world: int = 1
 
@@ -72,7 +74,7 @@ func write() -> void:
 	var data: Dictionary = {
 		"version": 1, "stars": stars, "best_time": best_time,
 		"music": music_on, "sound": sound_on, "haptics": haptics_on, "stats": stats_on,
-		"world": last_world,
+		"crash_reports": crash_reports_on, "world": last_world,
 	}
 	var tmp: String = PATH + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
@@ -96,6 +98,7 @@ func _load() -> void:
 	sound_on = bool(d.get("sound", true))
 	haptics_on = bool(d.get("haptics", true))
 	stats_on = bool(d.get("stats", true))
+	crash_reports_on = bool(d.get("crash_reports", true))
 	last_world = clampi(int(d.get("world", 1)), 1, Levels.WORLD_COUNT)
 
 

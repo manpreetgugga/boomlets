@@ -185,8 +185,8 @@ func _show_menu() -> void:
 	root.add_child(privacy)
 
 
-## The Privacy card: what the game collects, the player's own switch for
-## play stats, Google's ad-consent choices (where they apply) and the policy.
+## The Privacy card: what the game collects, the player's own switches for
+## play stats and crash reports, Google's ad-consent choices (where they apply) and the policy.
 func _show_privacy(root: Control) -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(0.16, 0.12, 0.25, 0.35)
@@ -207,7 +207,7 @@ func _show_privacy(root: Control) -> void:
 	box.add_child(Ui.label("Privacy", 54, Ui.INK, 900))
 	var about := Ui.label("Boomlets has no accounts and never asks for your name. "
 		+ "It shows ads from Google AdMob, and sends anonymous play stats "
-		+ "(like which levels are tricky) to Google Firebase. "
+		+ "(like which levels are tricky) and crash reports to Google Firebase. "
 		+ "Your progress stays on this phone.", 26, Ui.INK_SOFT, 800)
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	about.custom_minimum_size = Vector2(480, 0)
@@ -221,6 +221,14 @@ func _show_privacy(root: Control) -> void:
 		stats.color = Ui.MINT if Save.stats_on else Ui.CREAM.darkened(0.06)
 		stats.queue_redraw())
 	buttons.append(stats)
+	var crash := Btn.make("", &"", Vector2(440, 88), Ui.MINT if Save.crash_reports_on else Ui.CREAM.darkened(0.06))
+	crash.text = "Crash reports: On" if Save.crash_reports_on else "Crash reports: Off"
+	crash.pressed.connect(func() -> void:
+		Services.set_crash_reports_on(not Save.crash_reports_on)
+		crash.text = "Crash reports: On" if Save.crash_reports_on else "Crash reports: Off"
+		crash.color = Ui.MINT if Save.crash_reports_on else Ui.CREAM.darkened(0.06)
+		crash.queue_redraw())
+	buttons.append(crash)
 	if Services.privacy_options_required():
 		var ads := Btn.make("Ad choices", &"", Vector2(440, 88))
 		ads.pressed.connect(Services.show_privacy_options)

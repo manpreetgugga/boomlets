@@ -1,6 +1,6 @@
 # Play Console answers for Boomlets
 
-Prepared from what the app actually does (v0.5.0). Package: `com.manpreetgugga.boomlets`.
+Prepared from what the app actually does (v0.5.1). Package: `com.manpreetgugga.boomlets`.
 
 ## App content
 
@@ -33,11 +33,12 @@ Prepared from what the app actually does (v0.5.0). Package: `com.manpreetgugga.b
 |---|---|---|---|---|---|
 | Location > Approximate location (from IP) | Yes | Yes (Google AdMob) | No | Required | Advertising or marketing, Analytics, Fraud prevention |
 | App activity > App interactions (levels played, ad views) | Yes | No | No | Optional (Play stats switch) | Analytics |
-| App info and performance > Diagnostics | Yes | No | No | Optional | Analytics |
+| App info and performance > Crash logs | Yes | No | No | Optional (Crash reports switch) | App functionality, Analytics |
+| App info and performance > Diagnostics | Yes | No | No | Optional | App functionality, Analytics |
 | Device or other IDs (advertising ID, app instance ID) | Yes | Yes (Google AdMob) | No | Required | Advertising or marketing, Analytics, Fraud prevention |
 
 Notes:
-- "Shared" means sent to a third party for its own purposes. Google AdMob counts as sharing; Firebase Analytics acts as a service provider for us, so its data is "collected", not "shared".
+- "Shared" means sent to a third party for its own purposes. Google AdMob counts as sharing; Firebase Analytics acts as a service provider for us, so its data is "collected", not "shared". The same goes for Firebase Crashlytics (crash logs, since v0.5.1).
 - No personal info (name, email, phone), no financial info, no messages, photos, files, contacts, calendar or precise location.
 
 ## Monetisation setup

@@ -29,7 +29,7 @@
 <p>Boomlets is a game for Android made by Manpreet Gugga (publishing as MS' Studios). This policy explains what information the game uses, why, and the choices you have.</p>
 
 <div class="card">
-<p><strong>In short:</strong> there are no accounts, and the game never asks for your name, email, contacts, photos or location. Your progress is saved only on your phone. The game shows ads from Google AdMob and sends anonymous play statistics to Google Firebase. You can turn the statistics off in the game.</p>
+<p><strong>In short:</strong> there are no accounts, and the game never asks for your name, email, contacts, photos or location. Your progress is saved only on your phone. The game shows ads from Google AdMob and sends anonymous play statistics and crash reports to Google Firebase. You can turn both off in the game.</p>
 </div>
 
 <h2>Information saved on your phone</h2>
@@ -55,6 +55,16 @@
 </ul>
 <p>These events are tied to a random app-instance ID, not to you. Collection is off when the game starts. It is switched on only where no consent is needed, or after you agree in the consent form. You can turn it off at any time under <strong>Privacy &gt; Play stats</strong> on the main menu. Google keeps this data for a limited period and then deletes it. See <a href="https://firebase.google.com/support/privacy">Privacy and Security in Firebase</a>.</p>
 
+<h2>Crash reports (Google Firebase Crashlytics)</h2>
+<p>If the game crashes, it sends a crash report to Google Firebase Crashlytics so we can find and fix the problem. A report contains:</p>
+<ul>
+  <li>where in the game's code the crash happened,</li>
+  <li>device model, graphics chip and driver, operating system version, app version, free memory and whether the device is rotated,</li>
+  <li>a short list of what the game was doing just before (for example, which level was being started),</li>
+  <li>a random installation ID, used to count how many devices a crash affects.</li>
+</ul>
+<p>Reports are used only to fix crashes, never for advertising. Crash reporting is on when the game is first opened, so a crash at start-up can still be fixed. If you are in a region where the consent form appears, crash reports then follow your choice in that form. You can turn them off at any time under <strong>Privacy &gt; Crash reports</strong> on the main menu. Google keeps crash reports for 90 days. See <a href="https://firebase.google.com/support/privacy">Privacy and Security in Firebase</a>.</p>
+
 <h2>What we do not do</h2>
 <ul>
   <li>We do not sell your information.</li>
@@ -67,6 +77,7 @@
   <tr><th>Partner</th><th>Data</th><th>Purpose</th></tr>
   <tr><td>Google AdMob</td><td>Advertising ID, IP address, device info, ad interactions</td><td>Showing and measuring ads, fraud prevention</td></tr>
   <tr><td>Google Firebase Analytics</td><td>App-instance ID, game events, device info, approximate country</td><td>Improving the game</td></tr>
+  <tr><td>Google Firebase Crashlytics</td><td>Installation ID, crash details, device and graphics-driver info</td><td>Finding and fixing crashes</td></tr>
 </table>
 <p>Data sent to Google is encrypted in transit.</p>
 

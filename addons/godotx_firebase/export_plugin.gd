@@ -334,9 +334,9 @@ class AndroidExportPlugin extends EditorExportPlugin:
 			keys.append("google_analytics_default_allow_ad_user_data")
 			keys.append("google_analytics_default_allow_ad_personalization_signals")
 
-		# Hold crash reporting until the user opts in
-		if get_option("firebase/enable_crashlytics"):
-			keys.append("firebase_crashlytics_collection_enabled")
+		# Boomlets change: crash reports are NOT held here. They are on from the
+		# first launch (so a crash at start-up is still reported) and the player
+		# can turn them off under Privacy > Crash reports (core/Services.gd).
 
 		if keys.is_empty():
 			return ""

@@ -1,7 +1,7 @@
 # Sets up android/build (Godot's Gradle build template) for Firebase and AdMob.
 # The template is about 200 MB, so it is not in git: this script unpacks it from
 # the installed Godot export templates when it is missing, then patches
-# build.gradle for the google-services plugin. Safe to run again.
+# build.gradle for the google-services and Crashlytics plugins. Safe to run again.
 
 $project = Split-Path -Parent $PSScriptRoot
 $godotVersion = '4.7.1.stable'
@@ -30,6 +30,20 @@ if ($text -notmatch 'com\.google\.gms:google-services') {
 }
 if ($text -notmatch "apply plugin: 'com\.google\.gms\.google-services'") {
     $text = $text.TrimEnd() + "`n`napply plugin: 'com.google.gms.google-services'`n"
+    $changed = $true
+}
+# Crashlytics: its Gradle plugin stamps each build with the ID the SDK needs at
+# start-up, and the NDK library also catches native (engine and driver) crashes.
+if ($text -notmatch 'firebase-crashlytics-gradle') {
+    $text = $text -replace "(classpath 'com\.google\.gms:google-services:[^']+')", "`$1`n        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.6'"
+    $changed = $true
+}
+if ($text -notmatch "apply plugin: 'com\.google\.firebase\.crashlytics'") {
+    $text = $text.TrimEnd() + "`n`napply plugin: 'com.google.firebase.crashlytics'`n"
+    $changed = $true
+}
+if ($text -notmatch 'firebase-crashlytics-ndk') {
+    $text = $text.TrimEnd() + "`n`ndependencies {`n    implementation 'com.google.firebase:firebase-crashlytics-ndk:20.1.0'`n}`n"
     $changed = $true
 }
 if ($changed) {
