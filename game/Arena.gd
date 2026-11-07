@@ -53,7 +53,7 @@ const CRITTER_SIGHT: int = 3
 ## The chance a critter is dazed by a pod it has just spotted: it stares at
 ## it until it goes off (see _start_stare). Unlike the pairs above, this
 ## eases off from world 1: (world 1, last world).
-const STARE_RANGE := Vector2(0.63, 0.25)
+const STARE_RANGE := Vector2(0.3, 0.12)
 ## Lives at the start of a level (one more with [member assist]).
 const START_LIVES: int = 4
 ## Seconds Pip cannot be hurt after coming back.
@@ -1834,9 +1834,9 @@ func _update_critters(delta: float) -> void:
 			if cr.t >= 1.0:
 				cr.t = 1.0
 				cr.cell = cr.target
-		# The stare ends when the pod goes off (or something else moves,
-		# freezes or puts the critter to sleep).
-		if cr.stare != null and (cr.t < 1.0 or not pods.has(cr.stare) or kit.critter_busy(cr)):
+		# The stare ends when the pod goes off or Pip comes right up to the
+		# critter (or something else moves, freezes or puts it to sleep).
+		if cr.stare != null and (cr.t < 1.0 or not pods.has(cr.stare) or kit.critter_busy(cr) or _pip_beside(cr)):
 			cr.stare = null
 		if cr.t >= 1.0 and cr.stare == null and not _start_stare(cr):
 			var nd: Vector2i = _choose_dir(cr)
@@ -1908,13 +1908,14 @@ func _critter_danger(cr: Critter) -> Dictionary:
 
 
 ## Called as a critter reaches a tile: the first time it spots a pod (within
-## critter_sight) it may be dazed (chance critter_stare: about 6 in 10 in
+## critter_sight) it may be dazed (chance critter_stare: about 3 in 10 in
 ## world 1, a little less each world). It turns to face the pod and
 ## stares at it until it goes off, neither chasing Pip nor getting out of
-## the way. Bosses and busy critters (kit.critter_busy: asleep, frozen)
-## never are. True when it has just started staring.
+## the way, unless Pip comes right up to it. Bosses and busy critters
+## (kit.critter_busy: asleep, frozen) never are. True when it has just
+## started staring.
 func _start_stare(cr: Critter) -> bool:
-	if pods.is_empty() or demo or cr.kind == &"boss" or kit.critter_hidden(cr) or kit.critter_busy(cr):
+	if pods.is_empty() or demo or cr.kind == &"boss" or kit.critter_hidden(cr) or kit.critter_busy(cr) or _pip_beside(cr):
 		return false
 	var id: int = cr.get_instance_id()
 	for p: Pod in pods:
@@ -1945,6 +1946,12 @@ func _start_stare(cr: Critter) -> bool:
 		cr.mark.visible = true
 		return true
 	return false
+
+
+## True when Pip is right beside the critter (diagonals too): too close for
+## it to stay dazed by a pod.
+func _pip_beside(cr: Critter) -> bool:
+	return hero_alive and cr.pos.distance_to(hero_pos) <= 1.5
 
 
 ## The first step of the shortest walk from the critter to [param goal], or

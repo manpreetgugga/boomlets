@@ -16,7 +16,7 @@ general/android/app_id="ca-app-pub-6111568882988372~4882656897"
 
 config/name="Boomlets"
 config/description="A cheerful 3D clay arena game: drop fizz pods, blast crates, outsmart critters."
-config/version="0.5.7"
+config/version="0.5.8"
 run/main_scene="res://ui/Main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")

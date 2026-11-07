@@ -25,9 +25,6 @@ var _swipe_from: Vector2 = Vector2.INF
 var _dev: bool = false
 ## The Privacy card over the menu, while it is open.
 var _privacy: Control = null
-## Explore mode's frame-rate counter (top left), when it is on.
-var _fps_label: Label = null
-var _fps_wait: float = 0.0
 ## Phones: the 3D scene's render scale, and how long the game has run slow.
 var _scale_3d: float = 1.0
 var _slow_for: float = 0.0
@@ -56,7 +53,6 @@ func _ready() -> void:
 	top.add_child(_fade)
 	Sfx.music(true)
 	_tune_for_phone()
-	_ensure_fps_label()
 	world = Save.last_world
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	for a: String in args:
@@ -124,11 +120,6 @@ func _process(delta: float) -> void:
 		_title.rotation = sin(t * 1.3) * 0.03
 		_title.scale = Vector2.ONE * (1.0 + sin(t * 2.6) * 0.02)
 	_watch_speed(delta)
-	if _fps_label != null:
-		_fps_wait -= delta
-		if _fps_wait <= 0.0:
-			_fps_wait = 0.5
-			_fps_label.text = "%d fps  3D %d%%" % [Engine.get_frames_per_second(), roundi(get_viewport().scaling_3d_scale * 100.0)]
 
 
 # --- Speed -------------------------------------------------------------------
@@ -159,7 +150,7 @@ func _watch_speed(delta: float) -> void:
 # --- Explore mode (admin) ----------------------------------------------------
 
 ## Holding the star counter on the menu for 3 seconds opens every world and
-## level (and shows the frame rate); holding it again turns that off.
+## level; holding it again turns that off.
 func _hold_to_explore(c: Control) -> void:
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	var hold: Array[int] = [0]
@@ -181,23 +172,7 @@ func _toggle_explore() -> void:
 	Save.write()
 	Save.buzz(80)
 	Sfx.play(&"gate" if Save.explore_all else &"fail")
-	_ensure_fps_label()
 	_show_menu()
-
-
-func _ensure_fps_label() -> void:
-	if Save.explore_all and _fps_label == null:
-		var layer := CanvasLayer.new()
-		layer.layer = 30
-		add_child(layer)
-		_fps_label = Ui.outlined(Ui.label("", 24, Color.WHITE, 900), Ui.INK, 8)
-		_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		_fps_label.position = Vector2(16, 8)
-		_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		layer.add_child(_fps_label)
-	elif not Save.explore_all and _fps_label != null:
-		_fps_label.get_parent().queue_free()
-		_fps_label = null
 
 
 # --- Menu -------------------------------------------------------------------
