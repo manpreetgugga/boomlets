@@ -181,6 +181,14 @@ static func draw_icon(ci: CanvasItem, icon: StringName, c: Vector2, s: float, co
 		&"lock":
 			ci.draw_arc(c + Vector2(0, -h * 0.25), h * 0.38, PI, TAU, 16, color, h * 0.18, true)
 			ci.draw_rect(Rect2(c + Vector2(-h * 0.58, -h * 0.2), Vector2(h * 1.16, h * 0.95)), color)
+		&"privacy":
+			var shield := PackedVector2Array()
+			for p: Vector2 in [Vector2(0, -0.8), Vector2(0.62, -0.55), Vector2(0.6, 0.05), Vector2(0.38, 0.48), Vector2(0, 0.8),
+					Vector2(-0.38, 0.48), Vector2(-0.6, 0.05), Vector2(-0.62, -0.55)]:
+				shield.append(c + p * h)
+			ci.draw_colored_polygon(shield, color)
+			ci.draw_polyline(PackedVector2Array([c + Vector2(-h * 0.28, 0), c + Vector2(-h * 0.06, h * 0.24), c + Vector2(h * 0.3, -h * 0.24)]),
+				Color.WHITE, h * 0.16, true)
 		&"sound", &"music":
 			if icon == &"sound":
 				ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-h * 0.7, -h * 0.25), c + Vector2(-h * 0.35, -h * 0.25), c + Vector2(h * 0.05, -h * 0.65), c + Vector2(h * 0.05, h * 0.65), c + Vector2(-h * 0.35, h * 0.25), c + Vector2(-h * 0.7, h * 0.25)]), color)

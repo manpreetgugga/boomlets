@@ -35,6 +35,16 @@ static func make_kit(world: int) -> WorldKit:
 	return load("res://worlds/world_1.gd").new()
 
 
+## Starts loading world [param world]'s script and music on a background
+## thread, so showing that world later does not stall the game.
+static func warm(world: int) -> void:
+	if world < 1 or world > WORLD_COUNT or _kits.has(world):
+		return
+	for path: String in ["res://worlds/world_%d.gd" % world, "res://audio/music/world_%d.wav" % world]:
+		if ResourceLoader.exists(path) and not ResourceLoader.has_cached(path) 				and ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			ResourceLoader.load_threaded_request(path)
+
+
 ## A shared kit for reading a world's name, levels and so on.
 static func kit(world: int) -> WorldKit:
 	if not _kits.has(world):

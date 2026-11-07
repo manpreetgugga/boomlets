@@ -16,6 +16,9 @@ var stats_on: bool = true
 var crash_reports_on: bool = true
 ## The world played last; the menu's Play button opens its map.
 var last_world: int = 1
+## Admin "explore" mode (hold the star counter on the menu for 3 seconds):
+## every world and level is open, and a frame-rate counter shows.
+var explore_all: bool = false
 
 
 func _ready() -> void:
@@ -31,6 +34,8 @@ func stars_for(world: int, level: int) -> int:
 
 
 func is_unlocked(world: int, level: int) -> bool:
+	if explore_all:
+		return true
 	if level <= 1:
 		return world_unlocked(world)
 	return stars.has(key(world, level - 1))
@@ -39,10 +44,14 @@ func is_unlocked(world: int, level: int) -> bool:
 ## World 1 is always open; every other world opens once the one before it
 ## has its last level (the boss) cleared.
 func world_unlocked(world: int) -> bool:
-	return world <= 1 or world_cleared(world - 1)
+	return explore_all or world <= 1 or world_cleared(world - 1)
 
 
 func world_cleared(world: int) -> bool:
+	# A world never started cannot be cleared; checking that first means the
+	# world map's dots do not load every world's script just to draw.
+	if not stars.has(key(world, 1)):
+		return false
 	return stars.has(key(world, Levels.count(world)))
 
 
@@ -74,7 +83,7 @@ func write() -> void:
 	var data: Dictionary = {
 		"version": 1, "stars": stars, "best_time": best_time,
 		"music": music_on, "sound": sound_on, "haptics": haptics_on, "stats": stats_on,
-		"crash_reports": crash_reports_on, "world": last_world,
+		"crash_reports": crash_reports_on, "world": last_world, "explore_all": explore_all,
 	}
 	var tmp: String = PATH + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
@@ -99,6 +108,7 @@ func _load() -> void:
 	haptics_on = bool(d.get("haptics", true))
 	stats_on = bool(d.get("stats", true))
 	crash_reports_on = bool(d.get("crash_reports", true))
+	explore_all = bool(d.get("explore_all", false))
 	last_world = clampi(int(d.get("world", 1)), 1, Levels.WORLD_COUNT)
 
 

@@ -25,6 +25,18 @@ var _swipe_from: Vector2 = Vector2.INF
 var _dev: bool = false
 ## The Privacy card over the menu, while it is open.
 var _privacy: Control = null
+## Explore mode's frame-rate counter (top left), when it is on.
+var _fps_label: Label = null
+var _fps_wait: float = 0.0
+## Phones: the 3D scene's render scale, and how long the game has run slow.
+var _scale_3d: float = 1.0
+var _slow_for: float = 0.0
+
+## Phones draw the 3D scene at this share of the screen's resolution (the
+## interface stays sharp) and step down to MIN_SCALE_3D if they still cannot
+## keep up.
+const PHONE_SCALE_3D: float = 0.75
+const MIN_SCALE_3D: float = 0.55
 
 
 func _ready() -> void:
@@ -40,6 +52,8 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(_fade)
 	Sfx.music(true)
+	_tune_for_phone()
+	_ensure_fps_label()
 	world = Save.last_world
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	for a: String in args:
@@ -101,11 +115,86 @@ func _ensure_demo() -> void:
 	arena.process_mode = Node.PROCESS_MODE_ALWAYS
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _title != null:
 		var t: float = Time.get_ticks_msec() / 1000.0
 		_title.rotation = sin(t * 1.3) * 0.03
 		_title.scale = Vector2.ONE * (1.0 + sin(t * 2.6) * 0.02)
+	_watch_speed(delta)
+	if _fps_label != null:
+		_fps_wait -= delta
+		if _fps_wait <= 0.0:
+			_fps_wait = 0.5
+			_fps_label.text = "%d fps  3D %d%%" % [Engine.get_frames_per_second(), roundi(get_viewport().scaling_3d_scale * 100.0)]
+
+
+# --- Speed -------------------------------------------------------------------
+
+## Phones (high-refresh screens like the Pixel's 120 Hz) get a steady 60 fps
+## instead of a frame rate that jumps between 60 and 120, which looks like
+## stutter, and draw the 3D scene below full resolution.
+func _tune_for_phone() -> void:
+	if not OS.has_feature("mobile"):
+		return
+	Engine.max_fps = 60
+	_scale_3d = PHONE_SCALE_3D
+	get_viewport().scaling_3d_scale = _scale_3d
+
+
+## If a phone stays under ~50 fps for 4 seconds, draw the 3D a step smaller.
+func _watch_speed(delta: float) -> void:
+	if not OS.has_feature("mobile") or _scale_3d <= MIN_SCALE_3D or _busy or get_tree().paused:
+		_slow_for = 0.0
+		return
+	_slow_for = _slow_for + delta if Engine.get_frames_per_second() < 50 else 0.0
+	if _slow_for >= 4.0:
+		_slow_for = 0.0
+		_scale_3d = maxf(MIN_SCALE_3D, _scale_3d - 0.1)
+		get_viewport().scaling_3d_scale = _scale_3d
+
+
+# --- Explore mode (admin) ----------------------------------------------------
+
+## Holding the star counter on the menu for 3 seconds opens every world and
+## level (and shows the frame rate); holding it again turns that off.
+func _hold_to_explore(c: Control) -> void:
+	c.mouse_filter = Control.MOUSE_FILTER_STOP
+	var hold: Array[int] = [0]
+	c.gui_input.connect(func(e: InputEvent) -> void:
+		var mb := e as InputEventMouseButton
+		if mb == null or mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		hold[0] += 1
+		if not mb.pressed:
+			return
+		var id: int = hold[0]
+		get_tree().create_timer(3.0).timeout.connect(func() -> void:
+			if hold[0] == id and screen == &"menu" and is_instance_valid(c):
+				_toggle_explore()))
+
+
+func _toggle_explore() -> void:
+	Save.explore_all = not Save.explore_all
+	Save.write()
+	Save.buzz(80)
+	Sfx.play(&"gate" if Save.explore_all else &"fail")
+	_ensure_fps_label()
+	_show_menu()
+
+
+func _ensure_fps_label() -> void:
+	if Save.explore_all and _fps_label == null:
+		var layer := CanvasLayer.new()
+		layer.layer = 30
+		add_child(layer)
+		_fps_label = Ui.outlined(Ui.label("", 24, Color.WHITE, 900), Ui.INK, 8)
+		_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_fps_label.position = Vector2(16, 8)
+		_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(_fps_label)
+	elif not Save.explore_all and _fps_label != null:
+		_fps_label.get_parent().queue_free()
+		_fps_label = null
 
 
 # --- Menu -------------------------------------------------------------------
@@ -144,6 +233,14 @@ func _show_menu() -> void:
 	stars.position = Vector2(-230, 40)
 	stars.add_child(Ui.label("★ %d / %d" % [Save.total_stars(), Levels.WORLD_COUNT * 6 * 3], 32, Ui.INK, 900))
 	root.add_child(stars)
+	_hold_to_explore(stars)
+	if Save.explore_all:
+		var badge := Ui.card(Color(Ui.MINT, 0.94), 24)
+		badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		badge.position = Vector2(-230, 112)
+		badge.add_child(Ui.label("All worlds open", 22, Ui.INK, 900))
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(badge)
 
 	var play := Btn.make("PLAY", &"play", Vector2(440, 140), Ui.YELLOW)
 	play.font_size = 56
@@ -159,7 +256,7 @@ func _show_menu() -> void:
 	var sound := Btn.make("", &"sound", Vector2(104, 104))
 	sound.dimmed = not Save.sound_on
 	sound.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	sound.position = Vector2(-130, -200)
+	sound.position = Vector2(-208, -200)
 	sound.pressed.connect(func() -> void:
 		Save.sound_on = not Save.sound_on
 		sound.dimmed = not Save.sound_on
@@ -169,7 +266,7 @@ func _show_menu() -> void:
 	var music := Btn.make("", &"music", Vector2(104, 104))
 	music.dimmed = not Save.music_on
 	music.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	music.position = Vector2(26, -200)
+	music.position = Vector2(-52, -200)
 	music.pressed.connect(func() -> void:
 		Save.music_on = not Save.music_on
 		music.dimmed = not Save.music_on
@@ -177,10 +274,9 @@ func _show_menu() -> void:
 		Save.write())
 	root.add_child(music)
 
-	var privacy := Btn.make("Privacy", &"", Vector2(220, 64))
-	privacy.font_size = 28
+	var privacy := Btn.make("", &"privacy", Vector2(104, 104))
 	privacy.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	privacy.position = Vector2(-110, -82)
+	privacy.position = Vector2(104, -200)
 	privacy.pressed.connect(_show_privacy.bind(root))
 	root.add_child(privacy)
 
@@ -330,6 +426,9 @@ func _show_map(from_dir: int = 0) -> void:
 		root.add_child(lock_card)
 
 	_build_world_nav(root)
+	# Get the worlds either side ready while the player looks at this one.
+	Levels.warm(world + 1)
+	Levels.warm(world - 1)
 
 	if from_dir != 0:
 		root.position.x = 80.0 * from_dir

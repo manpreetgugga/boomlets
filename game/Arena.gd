@@ -31,6 +31,12 @@ const CAM_DIR := Vector3(0.0, 11.0, 5.0)
 const HUD_TOP: float = 170.0
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CRITTER_SPEED: Dictionary = {&"blobbit": 1.5, &"buzzer": 2.1, &"wisp": 1.1, &"boss": 1.0}
+## Every critter (and boss) walks at this share of its listed speed: a
+## gentler pace so levels stay a challenge without feeling unfair.
+const CRITTER_PACE: float = 0.85
+## How close a critter's centre must come to Pip's to hurt him, in tiles.
+const CRITTER_REACH: float = 0.55
+const BOSS_REACH: float = 0.9
 
 
 class Pod:
@@ -1367,7 +1373,7 @@ func _update_critters(delta: float) -> void:
 				cr.target = back
 				cr.t = 1.0 - cr.t
 				cr.dir = -cr.dir
-			cr.t += cr.speed * delta
+			cr.t += cr.speed * CRITTER_PACE * delta
 			if cr.t >= 1.0:
 				cr.t = 1.0
 				cr.cell = cr.target
@@ -1390,7 +1396,7 @@ func _update_critters(delta: float) -> void:
 			if not critters.has(cr):
 				continue
 		if not demo and hero_alive and state == &"play" and not hidden:
-			var reach: float = 1.0 if cr.kind == &"boss" else 0.62
+			var reach: float = BOSS_REACH if cr.kind == &"boss" else CRITTER_REACH
 			if cr.pos.distance_to(hero_pos) < reach:
 				_hurt_hero()
 		_pose_critter(cr, delta)
