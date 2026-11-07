@@ -435,7 +435,7 @@ static func beach_ball(r: RandomNumberGenerator) -> Node3D:
 	ball.position.y = 0.15
 	ball.rotation = Vector3(r.randf_range(-0.5, 0.5), r.randf() * TAU, r.randf_range(-0.5, 0.5))
 	root.add_child(ball)
-	var top := Models.sphere(0.15, -1, 16)
+	var top := Models.sphere(0.15, -1, 16).duplicate() as SphereMesh
 	top.is_hemisphere = true
 	top.height = 0.15
 	_part(ball, top, SWEETS[r.randi() % SWEETS.size()], Vector3.ZERO)

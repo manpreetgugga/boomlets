@@ -1,8 +1,9 @@
 extends Node
 ## The front end: main menu, a map per world (swipe or use the arrows to go
 ## between worlds) over a slowly turning arena of that world, and the levels
-## themselves. Swaps screens under a soft cream fade, pauses on Android's
-## back button and when the app goes to the background.
+## themselves. Swaps screens under a soft cream fade (worlds on the map slide
+## in instead), pauses on Android's back button and when the app goes to the
+## background.
 ##
 ## Dev arguments: --world=N, --level=N (straight into a level),
 ## --screen=map (straight onto the map of --world).
@@ -37,6 +38,12 @@ var _losses: Dictionary = {}
 ## keep up.
 const PHONE_SCALE_3D: float = 0.75
 const MIN_SCALE_3D: float = 0.55
+## The dim over the old world's arena while browsing to the next world, and
+## how long after a browse the new world's arena is built (once the map has
+## slid in, and long enough that flipping through worlds builds none of the
+## ones passed on the way).
+const BACKDROP_DIM := Color(0.16, 0.12, 0.25)
+const BACKDROP_WAIT: float = 0.45
 
 
 func _ready() -> void:
@@ -324,11 +331,21 @@ func _show_privacy(root: Control) -> void:
 
 ## Builds the map of [member world]. [param from_dir] (-1 or 1) slides it in
 ## from that side after browsing between worlds.
-func _show_map(from_dir: int = 0) -> void:
+func _show_map(from_dir: int = 0, quick: bool = false) -> void:
 	screen = &"map"
 	_clear_ui()
-	_ensure_demo()
-	Sfx.track(Levels.kit(world).music())
+	# A quick switch (browsing worlds) leaves the old world's arena up for a
+	# moment, dimmed, and builds the new one just after (_catch_up_backdrop).
+	var dim: ColorRect = null
+	if quick and arena != null and arena.demo and arena.world_id != world:
+		dim = ColorRect.new()
+		dim.color = Color(BACKDROP_DIM, 0.0)
+		dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_ui.add_child(dim)
+	else:
+		_ensure_demo()
+		Sfx.track(Levels.kit(world).music())
 	var open_world: bool = Save.world_unlocked(world)
 	var count: int = Levels.count(world)
 	var root := Control.new()
@@ -410,8 +427,34 @@ func _show_map(from_dir: int = 0) -> void:
 
 	if from_dir != 0:
 		root.position.x = 80.0 * from_dir
-		var tw := create_tween()
+		# Tied to this map, so browsing on mid-slide simply drops it.
+		var tw := root.create_tween()
 		tw.tween_property(root, "position:x", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if dim != null:
+		_catch_up_backdrop(dim)
+
+
+## The second half of a quick world switch: dims the old world's arena
+## behind the new map, builds this world's (and switches the music), then
+## lifts the dim, so the screen never fades out. Browsing on before the
+## build frees the dim, which skips it: only the world the player stops on
+## is built.
+func _catch_up_backdrop(dim: ColorRect) -> void:
+	dim.create_tween().tween_property(dim, "color:a", 0.45, 0.2)
+	await get_tree().create_timer(BACKDROP_WAIT).timeout
+	if not is_instance_valid(dim) or dim.is_queued_for_deletion() or _busy:
+		return
+	_ensure_demo()
+	Sfx.track(Levels.kit(world).music())
+	# The new arena's first frames are slow (meshes and shaders reaching the
+	# GPU): let them pass under the dim before lifting it.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(dim) or dim.is_queued_for_deletion():
+		return
+	var lift := dim.create_tween()
+	lift.tween_property(dim, "color:a", 0.0, 0.35)
+	lift.tween_callback(dim.queue_free)
 
 
 ## The card over a locked world's trail: what opens it (beating the boss
@@ -472,8 +515,8 @@ func _unlock_with_ad(b: Btn) -> void:
 			return
 		Save.open_with_ad(w)
 		Sfx.play(&"win", 0.0)
-		if screen == &"map" and world == w:
-			_go(_show_map))
+		if screen == &"map" and world == w and not _busy:
+			_show_map())
 
 
 func _wiggle(c: Control) -> void:
@@ -535,14 +578,15 @@ func _build_world_nav(root: Control) -> void:
 		nav.add_child(b)
 
 
-## Shows the map of the world [param dir] steps away (-1 left, 1 right).
+## Shows the map of the world [param dir] steps away (-1 left, 1 right),
+## straight away: no fade, and the arena behind it catches up a moment
+## later (see _show_map's quick switch).
 func _browse(dir: int) -> void:
 	var w: int = world + dir
 	if w < 1 or w > Levels.WORLD_COUNT or _busy:
 		return
-	_go(func() -> void:
-		world = w
-		_show_map(dir))
+	world = w
+	_show_map(dir, true)
 
 
 func _input(event: InputEvent) -> void:

@@ -235,6 +235,7 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	kit.arena = self
 	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
 	tune_for(world)
+	Models.meshes_for(world)
 	lives = START_LIVES
 	if not Models.palette_locked:
 		Models.use_palette(kit.palette())

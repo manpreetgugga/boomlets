@@ -158,7 +158,7 @@ static func king_slime() -> Node3D:
 		Models.part(crown, Models.cylinder(0.0, 0.08, 0.2, 4), GOLD, Vector3(sin(a) * 0.21, 0.24, cos(a) * 0.21), 0.15)
 		Models.part(crown, Models.sphere(0.045, -1, 8), PINK if k % 2 == 0 else ICE_DARK, Vector3(sin(a) * 0.275, 0.07, cos(a) * 0.275), 0.5)
 	# The beaker: open-topped glass with a white lip ring, a spout and marks.
-	var glass_mesh := Models.cylinder(0.65, 0.64, 0.44, 28)
+	var glass_mesh := Models.cylinder(0.65, 0.64, 0.44, 28).duplicate() as CylinderMesh
 	glass_mesh.cap_top = false
 	_glass_part(body, glass_mesh, ICE_LIGHT, Vector3(0, 0.32, 0), 0.12, 0.05)
 	var lip := TorusMesh.new()
@@ -194,7 +194,7 @@ static func vat(freeze: bool) -> Node3D:
 	Models.part(liquid, Models.cylinder(0.3, 0.3, 0.02, 22), color.lightened(0.18), Vector3(0, 0.625, 0), 0.2)
 	var shine := _no_shadow(Models.part(liquid, _box(Vector3(0.05, 0.46, 0.02), 0.01), Color.WHITE, Vector3(-0.2, 0.33, 0.29), 0.4))
 	shine.rotation.y = -0.6
-	var tank := Models.cylinder(0.345, 0.345, 0.68, 24)
+	var tank := Models.cylinder(0.345, 0.345, 0.68, 24).duplicate() as CylinderMesh
 	tank.cap_top = false
 	_glass_part(root, tank, ICE_LIGHT, Vector3(0, 0.5, 0), 0.1, 0.04)
 	var ring := TorusMesh.new()

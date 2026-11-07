@@ -134,7 +134,7 @@ static func bat() -> Node3D:
 	fly.position.y = 0.42
 	body.add_child(fly)
 	var gem := MeshInstance3D.new()
-	var s := Models.sphere(0.24, -1, 7)
+	var s := Models.sphere(0.24, -1, 7).duplicate() as SphereMesh
 	s.rings = 4
 	gem.mesh = s
 	gem.material_override = Models.mat(BAT, 0.25)
@@ -272,7 +272,7 @@ static func lantern() -> Node3D:
 	Models.part(root, _box(Vector3(0.16, 0.06, 0.16), 0.02), STONE_DARK, Vector3(0, 0.03, 0))
 	Models.part(root, Models.cylinder(0.025, 0.03, 0.8, 6), GOLD.darkened(0.15), Vector3(0, 0.42, 0))
 	var gem := MeshInstance3D.new()
-	var s := Models.sphere(0.1, -1, 6)
+	var s := Models.sphere(0.1, -1, 6).duplicate() as SphereMesh
 	s.rings = 3
 	gem.mesh = s
 	gem.material_override = Models.mat(LEMON, 1.6)

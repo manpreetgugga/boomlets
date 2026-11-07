@@ -331,7 +331,7 @@ func build_solid_blocks(spots: Array[Transform3D]) -> bool:
 	var colors: Array[Color] = [M.LIME, M.ICE, M.PINK]
 	for k in 3:
 		arena._multimesh(Models.cylinder(0.165, 0.155, 0.17, 16), colors[k], liquids[k], Models.mat(colors[k], 0.3))
-	var cup := Models.cylinder(0.165, 0.165, 0.12, 16)
+	var cup := Models.cylinder(0.165, 0.165, 0.12, 16).duplicate() as CylinderMesh
 	cup.cap_top = false
 	cup.cap_bottom = false
 	arena._multimesh(cup, M.ICE_LIGHT, beakers, Models.glass(M.ICE_LIGHT, 0.1, 0.04))

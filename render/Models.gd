@@ -161,22 +161,54 @@ static func part(parent: Node3D, mesh: Mesh, color: Color, pos: Vector3 = Vector
 	return mi
 
 
+## Spheres and cylinders are shared by size: a fresh mesh for every part
+## was generated and sent to the GPU on its own, which made each world slow
+## to build (the map's backdrop, every level). Sizes are rounded to the
+## millimetre, so randomly sized parts share too. Never change a mesh these
+## return; reshape a .duplicate() instead.
+static var _spheres: Dictionary = {}
+static var _cylinders: Dictionary = {}
+## The world they were made for (see [method meshes_for]).
+static var _mesh_world: int = 0
+const MESH_SNAP: float = 0.001
+
+
+## Called as each arena is set up. Moving to another world lets go of the
+## last world's shared meshes, so browsing many worlds doesn't pile them up
+## (each one stays alive while a part still uses it).
+static func meshes_for(world: int) -> void:
+	if world != _mesh_world:
+		_spheres.clear()
+		_cylinders.clear()
+		_mesh_world = world
+
+
 static func sphere(r: float, h: float = -1.0, segs: int = 20) -> SphereMesh:
-	var s := SphereMesh.new()
-	s.radius = r
-	s.height = r * 2.0 if h < 0.0 else h
-	s.radial_segments = segs
-	s.rings = maxi(segs / 2, 6)
+	r = snappedf(r, MESH_SNAP)
+	h = r * 2.0 if h < 0.0 else snappedf(h, MESH_SNAP)
+	var key := Vector3(r, h, segs)
+	var s: SphereMesh = _spheres.get(key)
+	if s == null:
+		s = SphereMesh.new()
+		s.radius = r
+		s.height = h
+		s.radial_segments = segs
+		s.rings = maxi(segs / 2, 6)
+		_spheres[key] = s
 	return s
 
 
 static func cylinder(top: float, bottom: float, h: float, segs: int = 16) -> CylinderMesh:
-	var c := CylinderMesh.new()
-	c.top_radius = top
-	c.bottom_radius = bottom
-	c.height = h
-	c.radial_segments = segs
-	c.rings = 1
+	var key := Vector4(snappedf(top, MESH_SNAP), snappedf(bottom, MESH_SNAP), snappedf(h, MESH_SNAP), segs)
+	var c: CylinderMesh = _cylinders.get(key)
+	if c == null:
+		c = CylinderMesh.new()
+		c.top_radius = key.x
+		c.bottom_radius = key.y
+		c.height = key.z
+		c.radial_segments = segs
+		c.rings = 1
+		_cylinders[key] = c
 	return c
 
 
