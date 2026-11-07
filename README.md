@@ -52,10 +52,10 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floatin
 
 - **Walk:** tap a tile and Pip walks there.
 - **Drop a pod:** double-tap anywhere.
-- Pods pop after 2.5 seconds and blast in a plus shape. Blasts set off other pods.
+- Pods pop after 2.4 seconds (2.1 by the last world), glowing red just before, and blast in a plus shape. Blasts set off other pods.
 - Pop every critter to open the exit pad, then walk onto it.
 - Finish quickly for 3 stars.
-- Out of lives? Watch a short ad for one more life (once per try).
+- Every level starts with 2 lives; hearts add more. Out of lives? Watch a short ad for one more life (up to 3 times per try).
 
 ### Power-ups (from broken crates)
 

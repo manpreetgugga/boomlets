@@ -15,6 +15,9 @@ const TOP_ZONE: float = 240.0
 ## A second tap this soon and this close to the first makes a double tap.
 const DOUBLE_TAP_MS: int = 300
 const DOUBLE_TAP_DIST: float = 120.0
+## "Out of lives!" offers a rewarded ad for one more life up to this many
+## times per try.
+const AD_LIVES: int = 3
 
 var arena: Arena
 ## Whether the win card offers Next: another level in this world, or the
@@ -38,8 +41,9 @@ var _star_ctrl: Control
 var _confetti: Control
 var _pause_btn: Btn
 var _clock: float = 0.0
-## The extra life from a rewarded ad is offered once per try.
-var _revived: bool = false
+## Extra lives from rewarded ads taken this try: offered up to AD_LIVES times,
+## after that the only way on is to try again.
+var _ad_lives: int = 0
 ## What the HUD showed last time it was drawn; it is only redrawn when this
 ## changes (or while a ripple, tip or hurry blink is animating).
 var _shown: Array = []
@@ -433,12 +437,14 @@ func _add_confetti() -> void:
 func _on_lost(reason: String) -> void:
 	_pause_btn.visible = false
 	var buttons: Array = []
-	var offer: bool = reason == "Out of lives!" and not _revived and Services.has_rewarded()
+	var offer: bool = reason == "Out of lives!" and _ad_lives < AD_LIVES and Services.has_rewarded()
+	var lines: Array = ["Critters left: %d" % arena.critters_left()]
 	if offer:
 		buttons.append(["Extra life (ad)", &"heart", _watch_for_life, Ui.YELLOW])
+		lines.append("Ad lives left: %d" % (AD_LIVES - _ad_lives))
 	buttons.append(["Try again", &"restart", func() -> void: restart_requested.emit(), Ui.CREAM.darkened(0.06) if offer else Ui.YELLOW])
 	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
-	_open_card(reason, buttons, -1, ["Critters left: %d" % arena.critters_left()])
+	_open_card(reason, buttons, -1, lines)
 
 
 ## Plays a rewarded ad and, if it was watched, carries on with one life.
@@ -446,7 +452,7 @@ func _watch_for_life() -> void:
 	Services.show_rewarded("extra_life", func(earned: bool) -> void:
 		if not earned or arena == null:
 			return
-		_revived = true
+		_ad_lives += 1
 		_close_card()
 		_pause_btn.visible = true
 		arena.revive())

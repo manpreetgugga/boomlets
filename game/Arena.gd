@@ -54,8 +54,9 @@ const CRITTER_SIGHT: int = 3
 ## it until it goes off (see _start_stare). Unlike the pairs above, this
 ## eases off from world 1: (world 1, last world).
 const STARE_RANGE := Vector2(0.3, 0.12)
-## Lives at the start of a level (one more with [member assist]).
-const START_LIVES: int = 4
+## Lives at the start of every level. Few on purpose: running out offers a
+## rewarded ad for one more (see revive).
+const START_LIVES: int = 2
 ## Seconds Pip cannot be hurt after coming back.
 const RESPAWN_GRACE: float = 3.0
 ## How close a critter's centre must come to Pip's to hurt him, in tiles.
@@ -138,8 +139,8 @@ var hero_warped: bool = false
 var hero_moving: bool = false
 var hero_yaw: float = 0.0
 var lives: int = START_LIVES
-## Set before setup() after the player lost this level twice in a row: one
-## more life and slower critters, quietly.
+## Set before setup() after the player lost this level twice in a row:
+## slower critters, quietly (no extra life: every level has START_LIVES).
 var assist: bool = false
 ## This level's fuse and critter settings (see EASY_WORLDS and assist).
 var fuse: float = FUSE
@@ -227,7 +228,7 @@ func setup(world: int, level: int, demo_mode: bool = false) -> void:
 	kit.arena = self
 	data = kit.levels()[clampi(level, 1, kit.levels().size()) - 1]
 	tune_for(world)
-	lives = START_LIVES + (1 if assist else 0)
+	lives = START_LIVES
 	if not Models.palette_locked:
 		Models.use_palette(kit.palette())
 	if not demo_mode:
