@@ -438,13 +438,11 @@ func _on_lost(reason: String) -> void:
 	_pause_btn.visible = false
 	var buttons: Array = []
 	var offer: bool = reason == "Out of lives!" and _ad_lives < AD_LIVES and Services.has_rewarded()
-	var lines: Array = ["Critters left: %d" % arena.critters_left()]
 	if offer:
 		buttons.append(["Extra life (ad)", &"heart", _watch_for_life, Ui.YELLOW])
-		lines.append("Ad lives left: %d" % (AD_LIVES - _ad_lives))
 	buttons.append(["Try again", &"restart", func() -> void: restart_requested.emit(), Ui.CREAM.darkened(0.06) if offer else Ui.YELLOW])
 	buttons.append(["Levels", &"list", func() -> void: map_requested.emit()])
-	_open_card(reason, buttons, -1, lines)
+	_open_card(reason, buttons, -1, ["Critters left: %d" % arena.critters_left()])
 
 
 ## Plays a rewarded ad and, if it was watched, carries on with one life.
