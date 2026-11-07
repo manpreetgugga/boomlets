@@ -7,6 +7,8 @@ extends Node3D
 
 signal won(stars: int, seconds: float)
 signal lost(reason: String)
+## Pip picked up a power-up (the HUD calls out the rare Pod Party).
+signal powered_up(kind: StringName)
 
 enum { FLOOR, WALL, CRATE, BARREL }
 
@@ -22,6 +24,11 @@ const BOSS_HP: int = 6
 const BASE_SPEED: float = 3.0
 const SPEED_STEP: float = 0.4
 const MAX_SPEED: float = 4.6
+## The rare Pod Party power-up lets Pip carry this many pods at once. One
+## hides in a crate in every boss fight; any other level has PARTY_CHANCE
+## of one.
+const PARTY_PODS: int = 5
+const PARTY_CHANCE: float = 0.05
 const NO_CELL := Vector2i(-1, -1)
 ## Camera: horizontal field of view, and how steeply it looks down.
 const CAM_FOV: float = 34.0
@@ -464,6 +471,13 @@ func _parse_map() -> void:
 			if k < shuffled.size():
 				drops[shuffled[k]] = StringName(kind)
 				k += 1
+	# And a Pod Party: in every boss fight, now and then elsewhere. Rolled
+	# with the global random numbers rather than rng (seeded by the level's
+	# name), so it changes from try to try and leaves the layout alone.
+	var boss_fight: bool = spawns.any(func(s: Array) -> bool: return s[0] == &"boss")
+	if not demo and not shuffled.is_empty() and (boss_fight or randf() < PARTY_CHANCE):
+		var spare: int = shuffled.size() - k
+		drops[shuffled[k + randi() % spare] if spare > 0 else shuffled.pick_random()] = &"party"
 	for s: Array in spawns:
 		_spawn_critter(s[0], s[1])
 
@@ -1801,10 +1815,13 @@ func _collect(c: Vector2i) -> void:
 			shield = true
 		&"heart":
 			lives = mini(lives + 1, 6)
+		&"party":
+			max_pods = maxi(max_pods, PARTY_PODS)
 	(pk["node"] as Node3D).queue_free()
 	_spawn_sparkles(Vector3(c.x, 0.5, c.y), Color("#FFF3B0"))
 	Sfx.play(&"pickup", 0.0)
 	Save.buzz(20)
+	powered_up.emit(pk["kind"])
 
 
 # --- Critters -----------------------------------------------------------------

@@ -18,6 +18,8 @@ const DOUBLE_TAP_DIST: float = 120.0
 ## "Out of lives!" offers a rewarded ad for one more life up to this many
 ## times per try.
 const AD_LIVES: int = 3
+## Seconds the "Pod Party!" call-out shows after one is picked up.
+const PARTY_SHOW: float = 2.6
 
 var arena: Arena
 ## Whether the win card offers Next: another level in this world, or the
@@ -34,6 +36,8 @@ var _cell_before: Vector2i = Arena.NO_CELL
 var _ripples: Array[Dictionary] = []
 var _keys_held: bool = false
 var _tip_t: float = 0.0
+## Seconds since a Pod Party was picked up.
+var _party_t: float = 99.0
 var _card: Control
 var _card_stars: int = -1
 var _card_t: float = 0.0
@@ -63,6 +67,13 @@ func _ready() -> void:
 	add_child(_pause_btn)
 	arena.won.connect(_on_won)
 	arena.lost.connect(_on_lost)
+	arena.powered_up.connect(_on_powered_up)
+
+
+func _on_powered_up(kind: StringName) -> void:
+	if kind == &"party":
+		_party_t = 0.0
+		_tip_t = maxf(_tip_t, 4.5)
 
 
 func _controls_on() -> bool:
@@ -120,6 +131,7 @@ func _press_pod() -> void:
 func _process(delta: float) -> void:
 	_clock += delta
 	_tip_t += delta
+	_party_t += delta
 	var live: Array[Dictionary] = []
 	for r: Dictionary in _ripples:
 		r["t"] += delta
@@ -140,7 +152,7 @@ func _process(delta: float) -> void:
 func _needs_redraw() -> bool:
 	if arena == null:
 		return false
-	if not _ripples.is_empty() or (_tip_t < 4.6 and arena.data.has("tip")):
+	if not _ripples.is_empty() or (_tip_t < 4.6 and arena.data.has("tip")) or _party_t < PARTY_SHOW + 0.1:
 		return true
 	var left: float = arena.time_left()
 	var blink: bool = left < 30.0 and arena.state == &"play" and fmod(_clock, 0.5) < 0.3
@@ -276,6 +288,16 @@ func _draw() -> void:
 		_pill(tr, Color(Ui.CREAM, 0.95 * a), 30, false)
 		for i in lines.size():
 			_text(lines[i], tr.position + Vector2(300, 35 + i * 40), 28, Color(Ui.INK, a), 800)
+
+	# "Pod Party!" for a moment after one is picked up: pops in, fades out.
+	if _party_t < PARTY_SHOW:
+		var a: float = clampf((PARTY_SHOW - _party_t) / 0.4, 0.0, 1.0)
+		var pop: float = 1.0 + 0.18 * sin(clampf(_party_t / 0.3, 0.0, 1.0) * PI)
+		var at := Vector2(w * 0.5, 360.0 if arena.boss != null else 300.0)
+		_pill(Rect2(at - Vector2(210, 66) * pop, Vector2(420, 132) * pop), Color(Ui.YELLOW, 0.96 * a), 40.0 * pop, false)
+		for i in Arena.PARTY_PODS:
+			Ui.draw_icon(self, &"pod", at + Vector2((i - (Arena.PARTY_PODS - 1) * 0.5) * 48.0, -26) * pop, 40.0 * pop, Color(Ui.INK, a))
+		_text("Pod Party!  %d pods at once" % Arena.PARTY_PODS, at + Vector2(0, 34) * pop, int(28 * pop), Color(Ui.INK, a), 900)
 
 	# A soft ripple where the finger landed: white for a walk, a bigger
 	# apricot one for a pod.

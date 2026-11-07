@@ -438,8 +438,12 @@ static func powerup(kind: StringName) -> Node3D:
 	body.position.y = 0.35
 	root.add_child(body)
 	var colors := {&"bomb": Color("#FFD166"), &"fire": Color("#FF7A59"), &"speed": Color("#7BD389"),
-		&"kick": Color("#6EC6EA"), &"shield": Color("#B8A6F2"), &"heart": Color("#FFB3C7")}
-	var disc := part(body, cylinder(0.32, 0.32, 0.12, 24), colors.get(kind, WHITE), Vector3.ZERO, 0.25)
+		&"kick": Color("#6EC6EA"), &"shield": Color("#B8A6F2"), &"heart": Color("#FFB3C7"),
+		&"party": Color("#FFB000")}
+	# The rare Pod Party coin is bigger and glows brighter than the rest.
+	if kind == &"party":
+		root.scale = Vector3.ONE * 1.25
+	var disc := part(body, cylinder(0.32, 0.32, 0.12, 24), colors.get(kind, WHITE), Vector3.ZERO, 0.8 if kind == &"party" else 0.25)
 	disc.rotation.x = PI * 0.5
 	part(body, cylinder(0.26, 0.26, 0.13, 24), WHITE).rotation.x = PI * 0.5
 	var icon := Node3D.new()
@@ -469,6 +473,12 @@ static func powerup(kind: StringName) -> Node3D:
 				var t: float = TAU * k / 24.0
 				pts.append(Vector2(16.0 * pow(sin(t), 3.0), 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)) * 0.009)
 			part(icon, ClayShapes.extrusion(pts, 0.07, 0.02, 2), Color("#E4572E"), Vector3(0, 0.0, 0), 0.2)
+		&"party":
+			# Five little pods in a ring round a spark.
+			for i in 5:
+				var a: float = PI * 0.5 + TAU * i / 5.0
+				part(icon, sphere(0.07, -1, 10), POD, Vector3(cos(a) * 0.15, sin(a) * 0.15, 0))
+			part(icon, sphere(0.045, -1, 8), FLAME_CORE, Vector3.ZERO, 2.0)
 	return root
 
 

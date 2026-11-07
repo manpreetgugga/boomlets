@@ -67,6 +67,7 @@ Boomlets is a cozy 3D arena game for Android. Help Pip clear twenty-five floatin
 | Kick | Walk into a pod to send it sliding |
 | Shield | Blocks one hit |
 | Heart | Extra life |
+| Pod Party | Carry 5 pods at once. Rare: one hides in every boss fight, and now and then in other levels |
 
 ## Worlds
 
