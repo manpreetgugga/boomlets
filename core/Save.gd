@@ -22,6 +22,13 @@ var stats_on: bool = true
 var crash_reports_on: bool = true
 ## The world played last; the menu's Play button opens its map.
 var last_world: int = 1
+## Play reminders (core/Reminders.gd): the player's own switch (the bell on
+## the menu), this install's random seed for picking lines and times, and how
+## often and when (unix time) the map last offered them.
+var reminders_on: bool = true
+var reminder_seed: int = 0
+var reminder_asks: int = 0
+var reminder_asked_at: int = 0
 ## Admin "explore" mode (hold the star counter on the menu for 3 seconds):
 ## every world and level is open, and a frame-rate counter shows.
 var explore_all: bool = false
@@ -108,6 +115,8 @@ func write() -> void:
 		"version": 1, "stars": stars, "best_time": best_time, "ad_opened": ad_opened,
 		"music": music_on, "sound": sound_on, "haptics": haptics_on, "stats": stats_on,
 		"crash_reports": crash_reports_on, "world": last_world, "explore_all": explore_all,
+		"reminders": reminders_on, "reminder_seed": reminder_seed,
+		"reminder_asks": reminder_asks, "reminder_asked_at": reminder_asked_at,
 	}
 	var tmp: String = PATH + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
@@ -135,6 +144,10 @@ func _load() -> void:
 	stats_on = bool(d.get("stats", true))
 	crash_reports_on = bool(d.get("crash_reports", true))
 	explore_all = bool(d.get("explore_all", false))
+	reminders_on = bool(d.get("reminders", true))
+	reminder_seed = int(d.get("reminder_seed", 0))
+	reminder_asks = int(d.get("reminder_asks", 0))
+	reminder_asked_at = int(d.get("reminder_asked_at", 0))
 	last_world = clampi(int(d.get("world", 1)), 1, Levels.WORLD_COUNT)
 
 

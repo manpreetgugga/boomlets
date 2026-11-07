@@ -26,6 +26,8 @@ var _swipe_from: Vector2 = Vector2.INF
 var _dev: bool = false
 ## The Privacy card over the menu, while it is open.
 var _privacy: Control = null
+## The menu's reminders bell, while the menu is up.
+var _bell: Btn = null
 ## Phones: the 3D scene's render scale, and how long the game has run slow.
 var _scale_3d: float = 1.0
 var _slow_for: float = 0.0
@@ -59,6 +61,7 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(_fade)
 	Sfx.music(true)
+	Reminders.changed.connect(_update_bell)
 	_tune_for_phone()
 	world = Save.last_world
 	var args: PackedStringArray = OS.get_cmdline_user_args()
@@ -241,7 +244,7 @@ func _show_menu() -> void:
 	var sound := Btn.make("", &"sound", Vector2(104, 104))
 	sound.dimmed = not Save.sound_on
 	sound.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	sound.position = Vector2(-208, -200)
+	sound.position = Vector2(-286, -200)
 	sound.pressed.connect(func() -> void:
 		Save.sound_on = not Save.sound_on
 		sound.dimmed = not Save.sound_on
@@ -251,7 +254,7 @@ func _show_menu() -> void:
 	var music := Btn.make("", &"music", Vector2(104, 104))
 	music.dimmed = not Save.music_on
 	music.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	music.position = Vector2(-52, -200)
+	music.position = Vector2(-130, -200)
 	music.pressed.connect(func() -> void:
 		Save.music_on = not Save.music_on
 		music.dimmed = not Save.music_on
@@ -259,11 +262,28 @@ func _show_menu() -> void:
 		Save.write())
 	root.add_child(music)
 
+	# Play reminders: dimmed while they are off (or not allowed by the phone).
+	_bell = Btn.make("", &"bell", Vector2(104, 104))
+	_bell.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_bell.position = Vector2(26, -200)
+	_bell.pressed.connect(func() -> void:
+		if Reminders.bell_on():
+			Reminders.turn_off()
+		else:
+			Reminders.turn_on())
+	root.add_child(_bell)
+	_update_bell()
+
 	var privacy := Btn.make("", &"privacy", Vector2(104, 104))
 	privacy.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	privacy.position = Vector2(104, -200)
+	privacy.position = Vector2(182, -200)
 	privacy.pressed.connect(_show_privacy.bind(root))
 	root.add_child(privacy)
+
+
+func _update_bell() -> void:
+	if is_instance_valid(_bell):
+		_bell.dimmed = not Reminders.bell_on()
 
 
 ## The Privacy card: what the game collects, the player's own switches for
@@ -424,6 +444,8 @@ func _show_map(from_dir: int = 0, quick: bool = false) -> void:
 	# Get the worlds either side ready while the player looks at this one.
 	Levels.warm(world + 1)
 	Levels.warm(world - 1)
+	if from_dir == 0 and Reminders.should_offer():
+		_offer_reminders(root)
 
 	if from_dir != 0:
 		root.position.x = 80.0 * from_dir
@@ -432,6 +454,62 @@ func _show_map(from_dir: int = 0, quick: bool = false) -> void:
 		tw.tween_property(root, "position:x", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	if dim != null:
 		_catch_up_backdrop(dim)
+
+
+## Offers play reminders over the map, once the map has settled. Android 13+
+## lets a game post notifications only after asking, so this asks nicely
+## first and Android's own prompt follows a "yes" (see Reminders.should_offer).
+func _offer_reminders(root: Control) -> void:
+	await get_tree().create_timer(0.7).timeout
+	if not is_instance_valid(root) or root.is_queued_for_deletion() or screen != &"map" or _busy:
+		return
+	Reminders.note_offered()
+	var dim := ColorRect.new()
+	dim.color = Color(BACKDROP_DIM, 0.35)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.add_child(center)
+	var panel := Ui.card(Ui.CREAM, 44)
+	panel.custom_minimum_size = Vector2(560, 0)
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 16)
+	panel.add_child(box)
+	var bell := Control.new()
+	bell.custom_minimum_size = Vector2(0, 96)
+	bell.draw.connect(func() -> void:
+		bell.draw_circle(bell.size * 0.5, 46, Ui.YELLOW)
+		Ui.draw_icon(bell, &"bell", bell.size * 0.5, 64, Ui.INK))
+	box.add_child(bell)
+	box.add_child(Ui.label("Can Pip nudge you?", 46, Ui.INK, 900))
+	var about := Ui.label("A friendly reminder to play in the morning, the evening and at night. "
+		+ "Turn it off any time with the bell on the menu.", 28, Ui.INK_SOFT, 800)
+	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	about.custom_minimum_size = Vector2(480, 0)
+	box.add_child(about)
+	var yes := Btn.make("Yes, remind me", &"", Vector2(440, 96), Ui.YELLOW)
+	yes.pressed.connect(func() -> void:
+		dim.queue_free()
+		Services.event("reminders_offer", {"answer": "yes"})
+		Reminders.turn_on(func(on: bool) -> void:
+			if on:
+				Sfx.play(&"gate")))
+	var later := Btn.make("Not now", &"", Vector2(440, 88))
+	later.pressed.connect(func() -> void:
+		dim.queue_free()
+		Services.event("reminders_offer", {"answer": "later"}))
+	for b: Btn in [yes, later]:
+		b.font_size = 34
+		var holder := CenterContainer.new()
+		holder.add_child(b)
+		box.add_child(holder)
+	panel.resized.connect(func() -> void: panel.pivot_offset = panel.size * 0.5)
+	panel.scale = Vector2(0.9, 0.9)
+	panel.create_tween().tween_property(panel, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## The second half of a quick world switch: dims the old world's arena

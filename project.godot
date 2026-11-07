@@ -16,7 +16,7 @@ general/android/app_id="ca-app-pub-6111568882988372~4882656897"
 
 config/name="Boomlets"
 config/description="A cheerful 3D clay arena game: drop fizz pods, blast crates, outsmart critters."
-config/version="0.5.12"
+config/version="0.5.13"
 run/main_scene="res://ui/Main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
@@ -28,6 +28,7 @@ boot_splash/show_image=false
 Save="*res://core/Save.gd"
 Sfx="*res://core/Sfx.gd"
 Services="*res://core/Services.gd"
+Reminders="*res://core/Reminders.gd"
 
 [display]
 
@@ -41,7 +42,7 @@ window/handheld/orientation=1
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/admob/plugin.cfg", "res://addons/godotx_firebase/plugin.cfg")
+enabled=PackedStringArray("res://addons/admob/plugin.cfg", "res://addons/godotx_firebase/plugin.cfg", "res://addons/boomlets_reminders/plugin.cfg")
 
 [input_devices]
 

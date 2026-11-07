@@ -18,3 +18,8 @@ export/
 # Android Gradle build template (about 200 MB; tools/prepare_android_build.ps1 recreates it)
 android/build/
 android/.build_version
+
+# Play reminders plugin build output (tools/build_reminders_plugin.ps1)
+android/reminders_plugin/build/
+android/reminders_plugin/.gradle/
+android/reminders_plugin/local.properties

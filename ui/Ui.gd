@@ -189,6 +189,18 @@ static func draw_icon(ci: CanvasItem, icon: StringName, c: Vector2, s: float, co
 			ci.draw_colored_polygon(shield, color)
 			ci.draw_polyline(PackedVector2Array([c + Vector2(-h * 0.28, 0), c + Vector2(-h * 0.06, h * 0.24), c + Vector2(h * 0.3, -h * 0.24)]),
 				Color.WHITE, h * 0.16, true)
+		&"bell":
+			var dome := PackedVector2Array()
+			for k in 13:
+				var a: float = PI + PI * k / 12.0
+				dome.append(c + Vector2(cos(a) * h * 0.46, -h * 0.12 + sin(a) * h * 0.52))
+			dome.append(c + Vector2(h * 0.5, h * 0.3))
+			dome.append(c + Vector2(h * 0.74, h * 0.5))
+			dome.append(c + Vector2(-h * 0.74, h * 0.5))
+			dome.append(c + Vector2(-h * 0.5, h * 0.3))
+			ci.draw_colored_polygon(dome, color)
+			ci.draw_circle(c + Vector2(0, h * 0.66), h * 0.16, color)
+			ci.draw_circle(c + Vector2(0, -h * 0.68), h * 0.1, color)
 		&"sound", &"music":
 			if icon == &"sound":
 				ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-h * 0.7, -h * 0.25), c + Vector2(-h * 0.35, -h * 0.25), c + Vector2(h * 0.05, -h * 0.65), c + Vector2(h * 0.05, h * 0.65), c + Vector2(-h * 0.35, h * 0.25), c + Vector2(-h * 0.7, h * 0.25)]), color)

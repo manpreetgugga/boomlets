@@ -1,0 +1,19 @@
+// Boomlets play reminders: a small Godot Android plugin (v2), built to
+// addons/boomlets_reminders/bin/boomlets_reminders.aar by
+// tools/build_reminders_plugin.ps1.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'boomlets_reminders'
