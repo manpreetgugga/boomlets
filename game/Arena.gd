@@ -538,6 +538,11 @@ func _build_environment() -> void:
 	sky_mat.set_shader_parameter(&"ground_color", Models.SKY_GROUND)
 	sky_mat.set_shader_parameter(&"cloud_amount", Models.CLOUDS)
 	sky_mat.set_shader_parameter(&"cloud_color", Models.CLOUD)
+	if SafeBoot.safe_mode:
+		# The level camera looks down more steeply than the menu's.
+		sky_mat.set_shader_parameter(&"dir_gradient", true)
+		sky_mat.set_shader_parameter(&"dir_bottom", -1.0)
+		sky_mat.set_shader_parameter(&"dir_top", 0.0 if demo else -0.6)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_64

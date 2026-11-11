@@ -776,4 +776,20 @@ func _back() -> void:
 			if is_instance_valid(_privacy):
 				_privacy.queue_free()
 			else:
-				get_tree().quit()
+				_leave()
+
+
+## Back on the menu. On Android the game goes to the background, like the
+## home button, and is not shut down: shutting the engine down from a running
+## game crashed for some players (Crashlytics: "pthread_mutex_lock called on
+## a destroyed mutex" in the engine's script clean-up).
+func _leave() -> void:
+	if OS.get_name() != "Android":
+		get_tree().quit()
+		return
+	Save.write()
+	var activity: Variant = null
+	if Engine.has_singleton("AndroidRuntime"):
+		activity = Engine.get_singleton("AndroidRuntime").getActivity()
+	if activity != null:
+		activity.moveTaskToBack(true)

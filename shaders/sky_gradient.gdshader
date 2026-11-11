@@ -27,6 +27,12 @@ uniform float energy : hint_range(0.0, 2.0) = 1.0;
 uniform float cloud_amount : hint_range(0.0, 1.0) = 0.0;
 uniform vec3 cloud_color : source_color = vec3(1.0);
 uniform float cloud_scale = 3.0;
+// OpenGL fallback (core/SafeBoot.gd): SCREEN_UV is not usable in the sky pass
+// there, so the gradient runs over the view direction's height instead,
+// from dir_bottom (bottom of the screen) to dir_top (top of the screen).
+uniform bool dir_gradient = false;
+uniform float dir_bottom = -1.0;
+uniform float dir_top = -0.2;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(234.34, 435.345));
@@ -92,6 +98,10 @@ vec3 cloud_sea(vec3 dir, vec3 col) {
 void sky() {
 	if (AT_CUBEMAP_PASS) {
 		COLOR = direction_gradient(EYEDIR) * energy;
+	} else if (dir_gradient) {
+		float t = pow(clamp((EYEDIR.y - dir_bottom) / (dir_top - dir_bottom), 0.0, 1.0), gradient_curve);
+		vec3 col = mix(horizon_color, top_color, t);
+		COLOR = cloud_sea(EYEDIR, col) * energy;
 	} else {
 		// SCREEN_UV.y is 0 at the top of the screen.
 		float t = pow(clamp(1.0 - SCREEN_UV.y, 0.0, 1.0), gradient_curve);

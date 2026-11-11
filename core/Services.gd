@@ -147,7 +147,8 @@ func _tag_crash_reports() -> void:
 		"gpu": RenderingServer.get_video_adapter_name(),
 		"gpu_vendor": RenderingServer.get_video_adapter_vendor(),
 		"gpu_api": RenderingServer.get_video_adapter_api_version(),
-		"renderer": str(ProjectSettings.get_setting("rendering/renderer/rendering_method.mobile", "mobile")),
+		"renderer": RenderingServer.get_current_rendering_method(),
+		"safe_mode": str(SafeBoot.safe_mode),
 		"game_version": str(ProjectSettings.get_setting("application/config/version", "")),
 	}
 	for k: String in tags:
