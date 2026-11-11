@@ -345,6 +345,30 @@ func _show_privacy(root: Control) -> void:
 		var holder := CenterContainer.new()
 		holder.add_child(b)
 		box.add_child(holder)
+	box.add_child(_studio_credit())
+
+
+## The studio line at the foot of the Privacy card: the Kpstn Studios mark,
+## "Made by Kpstn Studios" and the game version.
+func _studio_credit() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override(&"separation", 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mark := TextureRect.new()
+	mark.texture = preload("res://ui/kpstn-studios-mark.svg")
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.custom_minimum_size = Vector2(36, 36)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(mark)
+	var version := str(ProjectSettings.get_setting("application/config/version", ""))
+	row.add_child(Ui.label("Made by Kpstn Studios · v%s" % version, 24, Ui.INK_SOFT, 800))
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override(&"margin_top", 8)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(row)
+	return margin
 
 
 # --- Level map ---------------------------------------------------------------
